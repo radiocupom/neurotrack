@@ -6,7 +6,7 @@ import {
   obterRelatorioBigFive,
   obterResumoBigFive,
   type DashboardFilters,
-} from "@/service/dashboard-workflow.service";
+} from "@/lib/cache/cached-dashboard-workflow";
 import type { DashboardAnaliseIa, DashboardBigFiveResumo } from "@/app/dashboardsenso/dashboard-types";
 
 type LoadState = "idle" | "loading" | "success" | "error";
