@@ -215,8 +215,24 @@ export function FormularioParticipantePrivado({
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
 
+  function maskContato(value: string) {
+    const normalized = value.trim();
+    if (normalized.length <= 4) {
+      return "****";
+    }
+
+    return `${normalized.slice(0, 2)}***${normalized.slice(-2)}`;
+  }
+
   const handleBuscar = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.info("[opiniao-identificacao] submit buscar/criar", {
+      contato: maskContato(contato),
+      contatoLength: contato.trim().length,
+      hasNome: Boolean(nome.trim()),
+      hasEmail: Boolean(email.trim()),
+      expandido,
+    });
     await onBuscar(contato, nome || undefined, email || undefined);
   };
 

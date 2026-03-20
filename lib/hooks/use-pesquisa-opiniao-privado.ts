@@ -14,11 +14,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  buscarParticipanteOpiniaoPorContato,
-  criarParticipanteOpiniao,
   obterPesquisaOpiniao,
   responderPesquisaOpiniaoPrivada,
 } from "@/service/pesquisa-opiniao-workflow.service";
+import { buscarOuCriarParticipantePrivadoAction } from "@/app/pesquisa-opiniao/actions";
 import {
   normalizarParticipante,
   validarParticipante,
@@ -138,54 +137,55 @@ export function usePesquisaOpiniaoPrivado({
 
   const buscarOuCriarParticipante = useCallback(
     async (contato: string, nome?: string, email?: string) => {
+      const contatoNormalizado = contato.trim();
+      const contatoMascarado =
+        contatoNormalizado.length > 4
+          ? `${contatoNormalizado.slice(0, 2)}***${contatoNormalizado.slice(-2)}`
+          : "****";
+
+      console.info("[opiniao-identificacao] iniciando busca/criacao", {
+        contato: contatoMascarado,
+        hasNome: Boolean(nome?.trim()),
+        hasEmail: Boolean(email?.trim()),
+      });
+
       setParticipanteLoading(true);
       setParticipanteError(null);
 
       try {
-        // Tentar buscar primeiro
-        const resultadoBusca = await buscarParticipanteOpiniaoPorContato(contato);
+        const resultado = await buscarOuCriarParticipantePrivadoAction({
+          contato,
+          nome,
+          email,
+        });
 
-        if (resultadoBusca.ok && resultadoBusca.data) {
-          const normalizado = normalizarParticipante(resultadoBusca.data);
-          if (normalizado) {
-            setParticipante(normalizado);
-            return;
-          }
-        }
+        console.info("[opiniao-identificacao] retorno acao servidor", {
+          ok: resultado.ok,
+          status: resultado.status,
+          hasData: Boolean(resultado.data),
+        });
 
-        // Se não encontrou, criar novo
-        if (resultadoBusca.status === 404 || !resultadoBusca.ok) {
-          if (!nome || !nome.trim()) {
-            setParticipanteError("Nome é obrigatório para criar novo participante.");
-            return;
-          }
-
-          const resultadoCriacao = await criarParticipanteOpiniao({
-            nome: nome.trim(),
-            email: email?.trim() || undefined,
-            contatoOpcional: contato.trim(),
-          });
-
-          if (!resultadoCriacao.ok || !resultadoCriacao.data) {
-            setParticipanteError(
-              resultadoCriacao.message || "Erro ao criar participante.",
-            );
-            return;
-          }
-
-          const normalizado = normalizarParticipante(resultadoCriacao.data);
-          if (normalizado) {
-            setParticipante(normalizado);
-          } else {
-            setParticipanteError("Erro ao processar dados do participante criado.");
-          }
+        if (!resultado.ok || !resultado.data) {
+          setParticipanteError(resultado.message || "Erro ao buscar/criar participante.");
           return;
         }
 
-        setParticipanteError("Erro ao buscar/criar participante.");
+        const normalizado = normalizarParticipante(resultado.data);
+        if (normalizado) {
+          console.info("[opiniao-identificacao] participante pronto", {
+            participanteId: normalizado.id,
+          });
+          setParticipante(normalizado);
+          return;
+        }
+
+        console.warn("[opiniao-identificacao] falha ao normalizar participante retornado");
+        setParticipanteError("Erro ao processar dados do participante retornado.");
       } catch {
+        console.error("[opiniao-identificacao] excecao inesperada na identificacao");
         setParticipanteError("Erro inesperado ao processar participante.");
       } finally {
+        console.info("[opiniao-identificacao] fim do fluxo de identificacao");
         setParticipanteLoading(false);
       }
     },
