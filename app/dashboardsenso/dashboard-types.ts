@@ -169,6 +169,9 @@ export type DashboardOpiniaoParticipante = {
   estado?: string | null;
   cidade?: string | null;
   bairro?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  coordenada?: { latitude?: number | null; longitude?: number | null } | null;
   participante?: { id?: string; nome?: string | null; contatoOpcional?: string | null };
   entrevistador?: { id?: string; nome?: string | null; email?: string | null };
 };

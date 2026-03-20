@@ -146,6 +146,23 @@ export function obterParticipantesOpiniaoDashboardFromExternalApi(
   );
 }
 
+export function obterAnaliseOpiniaoDashboardFromExternalApi(
+  token: string,
+  pesquisaId: string,
+  query?: DashboardQuery,
+) {
+  return externalApiRequest<unknown>(
+    `/dashboard/resultado/opiniao/${encodeURIComponent(pesquisaId)}/analise-ia`,
+    {
+      method: "GET",
+      token,
+      query: normalizeQuery(query),
+      requiresAuth: true,
+      requiresPrivateToken: true,
+    },
+  );
+}
+
 export function obterAnaliseBigFiveDashboardFromExternalApi(token: string, query?: DashboardQuery) {
   return externalApiRequest<unknown>("/dashboard/resultado/bigfive/analise-ia", {
     method: "GET",

@@ -224,6 +224,26 @@ describe("SensoBigFiveWorkflow", () => {
     await screen.findByText("Cadastrar participante");
   });
 
+  it("abre cadastro quando busca retorna 404", async () => {
+    setupFetchSequence([
+      createJsonResponse(QUESTIONARIO_BASE),
+      createJsonResponse([{ id: CAMPANHA_ID, nome: "Senso Araruama", questionarioId: QUESTIONARIO_ID, ativo: true }]),
+      createJsonResponse([{ id: QUESTIONARIO_ID, nome: "Questionario Base" }]),
+      createJsonResponse({ message: "Participante nao encontrado" }, 404),
+    ]);
+
+    render(<SensoBigFiveWorkflow loggedUser={loggedUser} />);
+
+    await screen.findByText("Campanha da jornada");
+
+    fireEvent.change(screen.getByLabelText("Campanha"), { target: { value: CAMPANHA_ID } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar participante" }));
+    fireEvent.change(screen.getByLabelText("Telefone"), { target: { value: "55999999999" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+
+    await screen.findByText("Cadastrar participante");
+  });
+
   it("bloqueia e limpa campanha quando precheck retorna 404 de campanha", async () => {
     setupFetchSequence([
       createJsonResponse(QUESTIONARIO_BASE),

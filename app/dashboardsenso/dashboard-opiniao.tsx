@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -16,10 +16,14 @@ import type { AuthUser } from "@/lib/auth/types";
 import { useDashboardRealtime } from "@/app/dashboardsenso/use-dashboard-realtime";
 import { useOpiniaoDashboard } from "@/app/dashboardsenso/use-opiniao-dashboard";
 import { useDashboardFilters } from "@/app/dashboardsenso/use-dashboard-filters";
+import { SensoHeatMap, type HeatPoint } from "@/app/dashboardsenso/senso-heatmap";
+import type { DashboardAnaliseIa } from "@/app/dashboardsenso/dashboard-types";
 
 export type DashboardOpiniaoProps = {
   loggedUser: AuthUser;
 };
+
+type AbaOpiniao = "resultado" | "ia";
 
 function formatDate(value?: string | null) {
   if (!value) {
@@ -39,6 +43,9 @@ function readNumber(value: unknown) {
 }
 
 export function DashboardOpiniao({ loggedUser }: DashboardOpiniaoProps) {
+  const [aba, setAba] = useState<AbaOpiniao>("resultado");
+  const [loadingIa, setLoadingIa] = useState(false);
+  const [iaError, setIaError] = useState("");
   const { opiniaoFilters, patchFilters, clearFilters } = useDashboardFilters();
   const opiniao = useOpiniaoDashboard(opiniaoFilters);
 
@@ -69,6 +76,68 @@ export function DashboardOpiniao({ loggedUser }: DashboardOpiniaoProps) {
       })),
     }));
   }, [opiniao.resumo]);
+
+  const heatPoints = useMemo<HeatPoint[]>(() => {
+    if (!opiniao.participantesComCoordenada) {
+      return [];
+    }
+
+    const points: HeatPoint[] = [];
+
+    opiniao.participantesComCoordenada.respostas.forEach((item) => {
+        const latitude =
+          typeof item.latitude === "number"
+            ? item.latitude
+            : typeof item.coordenada?.latitude === "number"
+              ? item.coordenada.latitude
+              : null;
+
+        const longitude =
+          typeof item.longitude === "number"
+            ? item.longitude
+            : typeof item.coordenada?.longitude === "number"
+              ? item.coordenada.longitude
+              : null;
+
+        if (latitude == null || longitude == null) {
+          return;
+        }
+
+        points.push({
+          lat: latitude,
+          lng: longitude,
+          intensity: 0.65,
+        });
+      });
+
+    return points;
+  }, [opiniao.participantesComCoordenada]);
+
+  const indisponibilidadeIa = useMemo(() => {
+    const limitacoes = Array.isArray(opiniao.analiseIa?.limitacoes) ? opiniao.analiseIa.limitacoes : [];
+    return limitacoes.find((item) => /indispon|openai|fallback|temporar/i.test(item)) || "";
+  }, [opiniao.analiseIa]);
+
+  const carregarAnaliseIa = useCallback(async () => {
+    setLoadingIa(true);
+    setIaError("");
+
+    try {
+      await opiniao.refetchAnaliseIa();
+    } catch (error) {
+      setIaError(error instanceof Error ? error.message : "Falha ao carregar relatorio IA de opiniao.");
+    } finally {
+      setLoadingIa(false);
+    }
+  }, [opiniao]);
+
+  useEffect(() => {
+    if (aba !== "ia" || !opiniao.pesquisaId || opiniao.analiseIa || loadingIa) {
+      return;
+    }
+
+    void carregarAnaliseIa();
+  }, [aba, opiniao.pesquisaId, opiniao.analiseIa, loadingIa, carregarAnaliseIa]);
 
   return (
     <section className="flex flex-1 min-w-0 flex-col p-3 sm:p-6 lg:p-8">
@@ -101,6 +170,34 @@ export function DashboardOpiniao({ loggedUser }: DashboardOpiniaoProps) {
           </div>
         </header>
 
+        <div className="mt-6 flex w-full flex-wrap rounded-2xl border border-white/10 bg-slate-950/55 p-1 sm:inline-flex sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setAba("resultado")}
+            className={[
+              "min-w-0 flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition sm:min-w-40 sm:flex-none",
+              aba === "resultado"
+                ? "bg-cyan-500 text-slate-950"
+                : "text-slate-200 hover:bg-white/5",
+            ].join(" ")}
+          >
+            Resultado
+          </button>
+          <button
+            type="button"
+            onClick={() => setAba("ia")}
+            className={[
+              "min-w-0 flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition sm:min-w-40 sm:flex-none",
+              aba === "ia"
+                ? "bg-cyan-500 text-slate-950"
+                : "text-slate-200 hover:bg-white/5",
+            ].join(" ")}
+          >
+            Relatorio IA
+          </button>
+        </div>
+
+        {aba === "resultado" ? (
         <div className="mt-6 space-y-6">
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -214,6 +311,14 @@ export function DashboardOpiniao({ loggedUser }: DashboardOpiniaoProps) {
             </div>
           ) : null}
 
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="text-lg font-bold text-white">Mapa de calor por localizacao</h3>
+              <span className="text-xs text-slate-400">Pontos: {heatPoints.length}</span>
+            </div>
+            <SensoHeatMap points={heatPoints} />
+          </div>
+
           {opiniao.participantes ? (
             <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -249,6 +354,17 @@ export function DashboardOpiniao({ loggedUser }: DashboardOpiniaoProps) {
             </div>
           ) : null}
         </div>
+        ) : (
+          <div className="mt-6">
+            <IaCardsBlock
+              analise={opiniao.analiseIa}
+              loading={loadingIa}
+              error={iaError}
+              indisponibilidade={indisponibilidadeIa}
+              onRefresh={() => void carregarAnaliseIa()}
+            />
+          </div>
+        )}
       </div>
     </section>
   );
@@ -274,6 +390,114 @@ function StateBox({ text, tone = "info" }: { text: string; tone?: "info" | "erro
   return (
     <div className={`rounded-2xl border px-4 py-3 text-sm ${classes}`}>
       {text}
+    </div>
+  );
+}
+
+function IaCardsBlock({
+  analise,
+  loading,
+  error,
+  indisponibilidade,
+  onRefresh,
+}: {
+  analise: DashboardAnaliseIa | null;
+  loading: boolean;
+  error: string;
+  indisponibilidade: string;
+  onRefresh: () => void;
+}) {
+  const cards = analise?.cards && typeof analise.cards === "object" ? analise.cards : null;
+  const resumoExecutivo = Array.isArray(analise?.resumoExecutivo) ? analise.resumoExecutivo : [];
+  const riscosEAcoes = Array.isArray(analise?.riscosEAcoes) ? analise.riscosEAcoes : [];
+  const limitacoes = Array.isArray(analise?.limitacoes) ? analise.limitacoes : [];
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-bold text-white">Relatorio IA</h3>
+          <p className="mt-1 text-xs text-slate-400">Analise inteligente da pesquisa de opiniao com fallback seguro do backend.</p>
+        </div>
+        <Button type="button" onClick={onRefresh} disabled={loading} className="bg-cyan-500 text-slate-950">
+          {loading ? "Atualizando..." : "Atualizar analise"}
+        </Button>
+      </div>
+
+      {error ? <StateBox text={error} tone="error" /> : null}
+
+      {loading ? (
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="h-36 animate-pulse rounded-xl border border-white/10 bg-slate-900/70" />
+          <div className="h-36 animate-pulse rounded-xl border border-white/10 bg-slate-900/70" />
+          <div className="h-28 animate-pulse rounded-xl border border-white/10 bg-slate-900/70 lg:col-span-2" />
+        </div>
+      ) : null}
+
+      {!loading && indisponibilidade ? (
+        <div className="mt-4 rounded-xl border border-amber-300/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          {indisponibilidade}
+        </div>
+      ) : null}
+
+      {!loading && !analise ? (
+        <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/45 px-4 py-3 text-sm text-slate-300">
+          Nenhuma analise carregada ainda. Use o botao para buscar o relatorio IA da pesquisa.
+        </div>
+      ) : null}
+
+      {!loading && analise ? (
+        <div className="mt-4 space-y-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            {cards?.classificacao ? (
+              <article className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
+                <h4 className="text-sm font-bold text-cyan-300">Classificacao da pesquisa</h4>
+                <pre className="mt-2 overflow-auto text-xs text-slate-300">{JSON.stringify(cards.classificacao, null, 2)}</pre>
+              </article>
+            ) : null}
+
+            {cards?.metodos ? (
+              <article className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
+                <h4 className="text-sm font-bold text-cyan-300">Metodos estatisticos</h4>
+                <pre className="mt-2 overflow-auto text-xs text-slate-300">{JSON.stringify(cards.metodos, null, 2)}</pre>
+              </article>
+            ) : null}
+          </div>
+
+          {resumoExecutivo.length > 0 ? (
+            <article className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
+              <h4 className="text-sm font-bold text-cyan-300">Resumo executivo</h4>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-200">
+                {resumoExecutivo.map((item, index) => (
+                  <li key={`${item}-${index}`}>{item}</li>
+                ))}
+              </ul>
+            </article>
+          ) : null}
+
+          {riscosEAcoes.length > 0 ? (
+            <article className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
+              <h4 className="text-sm font-bold text-cyan-300">Riscos e acoes</h4>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-200">
+                {riscosEAcoes.map((item, index) => (
+                  <li key={`${item}-${index}`}>{item}</li>
+                ))}
+              </ul>
+            </article>
+          ) : null}
+
+          {limitacoes.length > 0 ? (
+            <article className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
+              <h4 className="text-sm font-bold text-cyan-300">Limitacoes</h4>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-200">
+                {limitacoes.map((item, index) => (
+                  <li key={`${item}-${index}`}>{item}</li>
+                ))}
+              </ul>
+            </article>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

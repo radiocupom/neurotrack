@@ -4,8 +4,16 @@
 
 "use client";
 
-import React, { useState } from "react";
-import { Card, Input, Button, Alert, RadioGroup } from "./ui-primitives";
+import React, { useEffect, useState } from "react";
+import { Card, Input, Button, Alert, RadioGroup, Select } from "./ui-primitives";
+import {
+  carregarBairrosPorMunicipio,
+  carregarCidadesPorUf,
+  carregarEstadosBrasileiros,
+  type BairroOption,
+  type CidadeOption,
+  type EstadoOption,
+} from "@/service/localidades-publicas.service";
 import type {
   Pergunta,
   ParticipanteNormalizado,
@@ -30,9 +38,157 @@ export function FormularioLocalizacao({
   loading = false,
   errors = {},
 }: FormularioLocalizacaoProps) {
-  const [estado, setEstado] = useState("");
+  const [estado, setEstado] = useState("SP");
   const [cidade, setCidade] = useState("");
+  const [cidadeId, setCidadeId] = useState<number | null>(null);
   const [bairro, setBairro] = useState("");
+  const [bairroId, setBairroId] = useState("");
+  const [estados, setEstados] = useState<EstadoOption[]>([]);
+  const [cidades, setCidades] = useState<CidadeOption[]>([]);
+  const [bairros, setBairros] = useState<BairroOption[]>([]);
+  const [loadingEstados, setLoadingEstados] = useState(false);
+  const [loadingCidades, setLoadingCidades] = useState(false);
+  const [loadingBairros, setLoadingBairros] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let canceled = false;
+
+    const loadEstados = async () => {
+      setLoadingEstados(true);
+      setLoadError(null);
+
+      try {
+        const result = await carregarEstadosBrasileiros();
+        if (!result.ok || !result.data) {
+          throw new Error(result.message || "Falha ao carregar estados.");
+        }
+
+        const estadosCarregados = result.data;
+
+        if (canceled) {
+          return;
+        }
+
+        setEstados(estadosCarregados);
+        setEstado((current) => {
+          if (estadosCarregados.some((item) => item.sigla === current)) {
+            return current;
+          }
+
+          return estadosCarregados[0]?.sigla ?? current;
+        });
+      } catch (error) {
+        if (!canceled) {
+          setLoadError(error instanceof Error ? error.message : "Falha ao carregar estados.");
+        }
+      } finally {
+        if (!canceled) {
+          setLoadingEstados(false);
+        }
+      }
+    };
+
+    void loadEstados();
+
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!estado.trim()) {
+      setCidades([]);
+      setCidade("");
+      setCidadeId(null);
+      setBairros([]);
+      setBairro("");
+      setBairroId("");
+      return;
+    }
+
+    let canceled = false;
+
+    const loadCidades = async () => {
+      setLoadingCidades(true);
+      setLoadError(null);
+      setCidade("");
+      setCidadeId(null);
+      setBairro("");
+      setBairroId("");
+      setBairros([]);
+
+      try {
+        const result = await carregarCidadesPorUf(estado);
+        if (!result.ok || !result.data) {
+          throw new Error(result.message || "Falha ao carregar cidades.");
+        }
+
+        if (!canceled) {
+          setCidades(result.data);
+        }
+      } catch (error) {
+        if (!canceled) {
+          setCidades([]);
+          setLoadError(error instanceof Error ? error.message : "Falha ao carregar cidades.");
+        }
+      } finally {
+        if (!canceled) {
+          setLoadingCidades(false);
+        }
+      }
+    };
+
+    void loadCidades();
+
+    return () => {
+      canceled = true;
+    };
+  }, [estado]);
+
+  useEffect(() => {
+    if (!cidadeId) {
+      setBairros([]);
+      setBairro("");
+      setBairroId("");
+      return;
+    }
+
+    let canceled = false;
+
+    const loadBairros = async () => {
+      setLoadingBairros(true);
+      setLoadError(null);
+      setBairro("");
+      setBairroId("");
+
+      try {
+        const result = await carregarBairrosPorMunicipio(cidadeId);
+        if (!result.ok || !result.data) {
+          throw new Error(result.message || "Falha ao carregar bairros.");
+        }
+
+        if (!canceled) {
+          setBairros(result.data);
+        }
+      } catch (error) {
+        if (!canceled) {
+          setBairros([]);
+          setLoadError(error instanceof Error ? error.message : "Falha ao carregar bairros.");
+        }
+      } finally {
+        if (!canceled) {
+          setLoadingBairros(false);
+        }
+      }
+    };
+
+    void loadBairros();
+
+    return () => {
+      canceled = true;
+    };
+  }, [cidadeId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,33 +197,60 @@ export function FormularioLocalizacao({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <Input
-        label="Estado (UF)"
-        placeholder="SP"
+      {loadError && <Alert type="warning">{loadError}</Alert>}
+
+      <Select
+        label="Estado"
+        options={estados.map((item) => ({ value: item.sigla, label: `${item.sigla} - ${item.nome}` }))}
         value={estado}
-        onChange={(e) => setEstado(e.target.value.toUpperCase())}
-        maxLength={2}
+        onChange={(e) => setEstado(e.target.value)}
         required
+        disabled={loading || loadingEstados}
         error={errors.estado}
       />
 
-      <Input
+      <Select
         label="Cidade"
-        placeholder="São Paulo"
-        value={cidade}
-        onChange={(e) => setCidade(e.target.value)}
+        options={cidades.map((item) => ({ value: String(item.id), label: item.nome }))}
+        value={cidadeId ? String(cidadeId) : ""}
+        onChange={(e) => {
+          const selected = cidades.find((item) => String(item.id) === e.target.value);
+          setCidadeId(selected?.id ?? null);
+          setCidade(selected?.nome ?? "");
+        }}
         required
+        disabled={loading || loadingCidades || !estado}
         error={errors.cidade}
       />
 
-      <Input
-        label="Bairro"
-        placeholder="Centro"
-        value={bairro}
-        onChange={(e) => setBairro(e.target.value)}
-        required
-        error={errors.bairro}
-      />
+      {!loadingBairros && cidadeId && bairros.length === 0 ? (
+        <Input
+          label="Bairro"
+          placeholder="Digite o bairro"
+          value={bairro}
+          onChange={(e) => {
+            setBairroId("");
+            setBairro(e.target.value);
+          }}
+          required
+          disabled={loading}
+          error={errors.bairro}
+        />
+      ) : (
+        <Select
+          label="Bairro"
+          options={bairros.map((item) => ({ value: item.id, label: item.nome }))}
+          value={bairroId}
+          onChange={(e) => {
+            const selected = bairros.find((item) => item.id === e.target.value);
+            setBairroId(e.target.value);
+            setBairro(selected?.nome ?? "");
+          }}
+          required
+          disabled={loading || loadingBairros || !cidadeId}
+          error={errors.bairro}
+        />
+      )}
 
       <Button type="submit" loading={loading} fullWidth>
         Próximo

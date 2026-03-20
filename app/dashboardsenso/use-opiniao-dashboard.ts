@@ -5,10 +5,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   listarPesquisasOpiniaoDashboardAction,
   obterParticipantesOpiniaoDashboardAction,
+  obterRelatorioOpiniaoDashboardAction,
   obterResumoOpiniaoDashboardAction,
 } from "@/app/dashboardsenso/opiniao-actions";
 import type { DashboardFilters } from "@/service/dashboard-filters";
 import type {
+  DashboardAnaliseIa,
   DashboardOpiniaoParticipantes,
   DashboardOpiniaoResumo,
   DashboardPesquisaOpiniao,
@@ -103,12 +105,22 @@ function normalizeParticipantes(payload: unknown, pesquisaId: string): Dashboard
         : { limit: 20, offset: 0, temMais: false },
     respostas: respostasRaw.map((item, index) => {
       const row = asObject(item);
+      const coordenadaRaw = asObject(row.coordenada);
       return {
         id: typeof row.id === "string" ? row.id : `resposta-${index}`,
         respondidoEm: typeof row.respondidoEm === "string" ? row.respondidoEm : undefined,
         estado: typeof row.estado === "string" ? row.estado : null,
         cidade: typeof row.cidade === "string" ? row.cidade : null,
         bairro: typeof row.bairro === "string" ? row.bairro : null,
+        latitude: typeof row.latitude === "number" ? row.latitude : null,
+        longitude: typeof row.longitude === "number" ? row.longitude : null,
+        coordenada:
+          row.coordenada && typeof row.coordenada === "object"
+            ? {
+                latitude: typeof coordenadaRaw.latitude === "number" ? coordenadaRaw.latitude : null,
+                longitude: typeof coordenadaRaw.longitude === "number" ? coordenadaRaw.longitude : null,
+              }
+            : null,
         participante:
           row.participante && typeof row.participante === "object"
             ? (row.participante as { id?: string; nome?: string | null; contatoOpcional?: string | null })
@@ -122,6 +134,14 @@ function normalizeParticipantes(payload: unknown, pesquisaId: string): Dashboard
   };
 }
 
+function normalizeAnalise(payload: unknown): DashboardAnaliseIa {
+  if (!payload || typeof payload !== "object") {
+    return {};
+  }
+
+  return payload as DashboardAnaliseIa;
+}
+
 export function useOpiniaoDashboard(filters: DashboardFilters) {
   const [state, setState] = useState<LoadState>("idle");
   const [error, setError] = useState("");
@@ -130,6 +150,8 @@ export function useOpiniaoDashboard(filters: DashboardFilters) {
   const [pesquisaId, setPesquisaId] = useState("");
   const [resumo, setResumo] = useState<DashboardOpiniaoResumo | null>(null);
   const [participantes, setParticipantes] = useState<DashboardOpiniaoParticipantes | null>(null);
+  const [participantesComCoordenada, setParticipantesComCoordenada] = useState<DashboardOpiniaoParticipantes | null>(null);
+  const [analiseIa, setAnaliseIa] = useState<DashboardAnaliseIa | null>(null);
 
   const canLoad = Boolean(pesquisaId);
 
@@ -156,13 +178,16 @@ export function useOpiniaoDashboard(filters: DashboardFilters) {
     setError("");
 
     try {
-      const [resumoResult, participantesResult] = await Promise.all([
+      const [resumoResult, participantesResult, coordenadasResult] = await Promise.all([
         obterResumoOpiniaoDashboardAction(pesquisaId, filters),
         obterParticipantesOpiniaoDashboardAction(pesquisaId, filters),
+        obterParticipantesOpiniaoDashboardAction(pesquisaId, {
+          ...filters,
+          apenasComCoordenada: true,
+          limit: 1000,
+          offset: 0,
+        }),
       ]);
-
-      console.log("[use-opiniao-dashboard] resumoResult ->", resumoResult);
-      console.log("[use-opiniao-dashboard] participantesResult ->", participantesResult);
 
       if (!resumoResult.ok) {
         throw new Error(resumoResult.message || "Falha ao carregar resumo de opiniao.");
@@ -172,8 +197,13 @@ export function useOpiniaoDashboard(filters: DashboardFilters) {
         throw new Error(participantesResult.message || "Falha ao carregar participantes de opiniao.");
       }
 
+      if (!coordenadasResult.ok) {
+        throw new Error(coordenadasResult.message || "Falha ao carregar participantes com coordenadas de opiniao.");
+      }
+
       setResumo(normalizeResumo(resumoResult.data, pesquisaId));
       setParticipantes(normalizeParticipantes(participantesResult.data, pesquisaId));
+      setParticipantesComCoordenada(normalizeParticipantes(coordenadasResult.data, pesquisaId));
       setState("success");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao carregar dashboard de opiniao.");
@@ -198,6 +228,19 @@ export function useOpiniaoDashboard(filters: DashboardFilters) {
 
   const hasData = useMemo(() => Boolean(resumo && participantes), [resumo, participantes]);
 
+  const refetchAnaliseIa = useCallback(async () => {
+    if (!pesquisaId) {
+      return;
+    }
+
+    const result = await obterRelatorioOpiniaoDashboardAction(pesquisaId, filters);
+    if (!result.ok) {
+      throw new Error(result.message || "Falha ao carregar relatorio IA de opiniao.");
+    }
+
+    setAnaliseIa(normalizeAnalise(result.data));
+  }, [filters, pesquisaId]);
+
   return {
     state,
     error,
@@ -206,7 +249,10 @@ export function useOpiniaoDashboard(filters: DashboardFilters) {
     setPesquisaId,
     resumo,
     participantes,
+    participantesComCoordenada,
+    analiseIa,
     hasData,
     refetch,
+    refetchAnaliseIa,
   };
 }

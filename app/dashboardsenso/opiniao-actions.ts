@@ -3,6 +3,7 @@
 import type { DashboardFilters } from "@/service/dashboard-filters";
 import {
   listarPesquisasOpiniaoDashboardAction as listarPesquisasOpiniaoDashboardBaseAction,
+  obterRelatorioOpiniaoDashboardAction as obterRelatorioOpiniaoDashboardBaseAction,
   obterResumoOpiniaoDashboardAction as obterResumoOpiniaoDashboardBaseAction,
   obterParticipantesOpiniaoDashboardAction as obterParticipantesOpiniaoDashboardBaseAction,
 } from "@/app/dashboardsenso/dashboard-actions";
@@ -23,4 +24,11 @@ export async function obterParticipantesOpiniaoDashboardAction(
   filtros?: DashboardFilters,
 ) {
   return obterParticipantesOpiniaoDashboardBaseAction(pesquisaId, filtros);
+}
+
+export async function obterRelatorioOpiniaoDashboardAction(
+  pesquisaId: string,
+  filtros?: DashboardFilters,
+) {
+  return obterRelatorioOpiniaoDashboardBaseAction(pesquisaId, filtros);
 }

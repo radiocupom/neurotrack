@@ -885,7 +885,16 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 			dispatch({ type: "setTelefone", payload: telefone });
 
 			const response = await buscarParticipantePorContato(telefone);
-			if (!response.ok) throw new Error(response.message || "Falha ao consultar participante.");
+			if (!response.ok) {
+				if (response.status === 404) {
+					setConfirmModalOpen(false);
+					setCreateModalOpen(true);
+					setError(PARTICIPANTE_NOT_FOUND_MESSAGE);
+					return;
+				}
+
+				throw new Error(response.message || "Falha ao consultar participante.");
+			}
 			const data = response.data;
 
 			const lookup = readParticipantLookup(data);

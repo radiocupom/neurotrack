@@ -7,11 +7,16 @@ import { Sidebar } from "@/app/components/layout/sidebar";
 import { SensoBigFiveWorkflow } from "../sensobigfive/senso-bigfive-workflow";
 import { DashboardSensoBigFive } from "../dashboardsenso/dashboard-senso-bigfive";
 import { DashboardOpiniao } from "../dashboardsenso/dashboard-opiniao";
+import { DashboardVoto } from "../dashboardsenso/dashboard-voto";
 import { UsuariosWorkflow } from "../usuariosdosistema/usuarios-workflow";
 import { ListaPesquisasClient } from "@/app/pesquisa-opiniao/lista-pesquisas-client";
 import { ResponderPesquisaPrivadoClient } from "@/app/pesquisa-opiniao/responder/responder-privado-client";
 import { CriarPesquisaClient } from "@/app/pesquisa-opiniao/criar-pesquisa-client";
 import { EditarPesquisaClient } from "@/app/pesquisa-opiniao/editar-pesquisa-client";
+import { CriarPesquisaIntencaoVotoClient } from "@/app/intencao-voto/criar-pesquisa-client";
+import { EditarPesquisaIntencaoVotoClient } from "@/app/intencao-voto/editar-pesquisa-client";
+import { ListaPesquisasIntencaoVotoClient } from "@/app/intencao-voto/lista-pesquisas-client";
+import { ResponderIntencaoVotoPrivadoClient } from "@/app/intencao-voto/responder/responder-privado-client";
 
 const ADMIN_ROLES = new Set(["SUPERADMIN", "ADMIN"]);
 
@@ -25,10 +30,15 @@ export function AreaShell({ user }: AreaShellProps) {
   const isSensoBigFiveView = activeView === "senso-aplicar" || activeView === "senso-criar-campanha";
   const isDashboardSensoBigFiveView = activeView === "dashboard-senso";
   const isDashboardOpiniaoView = activeView === "dashboard-opiniao";
+  const isDashboardVotoView = activeView === "dashboard-voto";
   const isOpiniaoListView = activeView === "opiniao-listar";
   const isOpiniaoAplicarView = activeView === "opiniao-aplicar";
   const isOpiniaoCriarView = activeView === "opiniao-criar";
   const isOpiniaoEditarView = activeView === "opiniao-editar";
+  const isVotoListView = activeView === "voto-listar";
+  const isVotoAplicarView = activeView === "voto-aplicar";
+  const isVotoCriarView = activeView === "voto-criar";
+  const isVotoEditarView = activeView === "voto-editar";
 
   return (
     <div className="relative flex flex-1 overflow-hidden">
@@ -58,10 +68,20 @@ export function AreaShell({ user }: AreaShellProps) {
           <CriarPesquisaClient />
         ) : isOpiniaoEditarView ? (
           <EditarPesquisaClient />
+        ) : isVotoListView ? (
+          <ListaPesquisasIntencaoVotoClient />
+        ) : isVotoAplicarView ? (
+          <ResponderIntencaoVotoPrivadoClient />
+        ) : isVotoCriarView ? (
+          <CriarPesquisaIntencaoVotoClient />
+        ) : isVotoEditarView ? (
+          <EditarPesquisaIntencaoVotoClient />
         ) : isDashboardSensoBigFiveView ? (
           <DashboardSensoBigFive loggedUser={user} />
         ) : isDashboardOpiniaoView ? (
           <DashboardOpiniao loggedUser={user} />
+        ) : isDashboardVotoView ? (
+          <DashboardVoto loggedUser={user} />
         ) : activeView ? (
           <ContentPlaceholder view={activeView} />
         ) : (

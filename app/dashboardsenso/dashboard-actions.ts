@@ -6,6 +6,7 @@ import {
   listarPesquisasOpiniaoDashboardFromExternalApi,
   listarPesquisasSensoDashboardFromExternalApi,
   obterAnaliseBigFiveDashboardFromExternalApi,
+  obterAnaliseOpiniaoDashboardFromExternalApi,
   obterAnaliseSensoDashboardFromExternalApi,
   obterParticipantesOpiniaoDashboardFromExternalApi,
   obterParticipantesSensoDashboardFromExternalApi,
@@ -206,5 +207,20 @@ export async function obterParticipantesOpiniaoDashboardAction(
     return { ok: true, status: 200, data, message: "ok" };
   } catch (error) {
     return mapError(error, "Falha ao carregar participantes do dashboard de opiniao.");
+  }
+}
+
+export async function obterRelatorioOpiniaoDashboardAction(
+  pesquisaId: string,
+  filtros?: DashboardFilters,
+): Promise<ApiResult<unknown>> {
+  const auth = await requireToken();
+  if (!auth.ok) return { ok: false, status: auth.status, data: null, message: auth.message };
+
+  try {
+    const data = await obterAnaliseOpiniaoDashboardFromExternalApi(auth.token, pesquisaId, toDashboardQuery(filtros));
+    return { ok: true, status: 200, data, message: "ok" };
+  } catch (error) {
+    return mapError(error, "Falha ao carregar relatorio IA do dashboard de opiniao.");
   }
 }

@@ -155,6 +155,7 @@ export function usePesquisaOpiniaoPrivado({
       try {
         const resultado = await buscarOuCriarParticipantePrivadoAction({
           contato,
+          pesquisaId,
           nome,
           email,
         });
@@ -189,7 +190,7 @@ export function usePesquisaOpiniaoPrivado({
         setParticipanteLoading(false);
       }
     },
-    [],
+    [pesquisaId],
   );
 
   // ========================================================================

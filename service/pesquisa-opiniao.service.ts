@@ -412,15 +412,20 @@ export async function excluirPesquisa(token: string, pesquisaId: string): Promis
 export async function buscarParticipantePorContato(
   token: string,
   contato: string,
+  pesquisaId?: string,
 ): Promise<ApiResponse<Participante>> {
   try {
     const data = await externalApiRequest<Participante>(
-      `${MODULE_PATH}/buscar-por-contato?contato=${encodeURIComponent(contato)}`,
+      `${MODULE_PATH}/buscar-por-contato`,
       {
         method: "GET",
         token,
         requiresAuth: true,
         requiresPrivateToken: true,
+        query: {
+          contato,
+          pesquisaId: pesquisaId?.trim() || undefined,
+        },
       },
     );
 
@@ -444,6 +449,18 @@ export async function buscarParticipantePorContato(
         data: null,
         message: "Participante não encontrado.",
       };
+    }
+
+    if (status === 400 && message) {
+      const messageLower = message.toLowerCase();
+      if (messageLower.includes("duplicad") || messageLower.includes("ja respondeu") || messageLower.includes("já respondeu")) {
+        return {
+          ok: false,
+          status: 400,
+          data: null,
+          message: "Este participante já respondeu esta pesquisa.",
+        };
+      }
     }
 
     return {
