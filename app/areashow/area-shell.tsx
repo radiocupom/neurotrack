@@ -6,6 +6,7 @@ import type { AuthUser } from "@/lib/auth/types";
 import { Sidebar } from "@/app/components/layout/sidebar";
 import { SensoBigFiveWorkflow } from "../sensobigfive/senso-bigfive-workflow";
 import { DashboardSensoBigFive } from "../dashboardsenso/dashboard-senso-bigfive";
+import { DashboardOpiniao } from "../dashboardsenso/dashboard-opiniao";
 import { UsuariosWorkflow } from "../usuariosdosistema/usuarios-workflow";
 import { ListaPesquisasClient } from "@/app/pesquisa-opiniao/lista-pesquisas-client";
 import { ResponderPesquisaPrivadoClient } from "@/app/pesquisa-opiniao/responder/responder-privado-client";
@@ -23,6 +24,7 @@ export function AreaShell({ user }: AreaShellProps) {
   const isUsuariosView = activeView.startsWith("usuarios-");
   const isSensoBigFiveView = activeView === "senso-aplicar" || activeView === "senso-criar-campanha";
   const isDashboardSensoBigFiveView = activeView === "dashboard-senso";
+  const isDashboardOpiniaoView = activeView === "dashboard-opiniao";
   const isOpiniaoListView = activeView === "opiniao-listar";
   const isOpiniaoAplicarView = activeView === "opiniao-aplicar";
   const isOpiniaoCriarView = activeView === "opiniao-criar";
@@ -58,6 +60,8 @@ export function AreaShell({ user }: AreaShellProps) {
           <EditarPesquisaClient />
         ) : isDashboardSensoBigFiveView ? (
           <DashboardSensoBigFive loggedUser={user} />
+        ) : isDashboardOpiniaoView ? (
+          <DashboardOpiniao loggedUser={user} />
         ) : activeView ? (
           <ContentPlaceholder view={activeView} />
         ) : (

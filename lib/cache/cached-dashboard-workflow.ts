@@ -29,6 +29,9 @@ const CACHE_CONFIG = {
 
   // Participantes (podem mudar frequentemente)
   PARTICIPANTES_SENSO: 2 * 60 * 1000, // 2 minutos
+  RESUMO_OPINIAO: 2 * 60 * 1000, // 2 minutos
+  PARTICIPANTES_OPINIAO: 2 * 60 * 1000, // 2 minutos
+  PESQUISAS_OPINIAO: 30 * 60 * 1000, // 30 minutos
 };
 
 /**
@@ -136,6 +139,36 @@ export async function obterRelatorioBigFive(filtros?: DashboardFilters) {
   );
 }
 
+export async function listarPesquisasOpiniaoDashboard() {
+  const cacheKey = CacheManager.generateKey("dashboard", "pesquisas-opiniao");
+
+  return cacheManager.getOrExecute(
+    cacheKey,
+    () => DashboardWorkflow.listarPesquisasOpiniaoDashboard(),
+    { ttl: CACHE_CONFIG.PESQUISAS_OPINIAO },
+  );
+}
+
+export async function obterResumoOpiniaoDashboard(pesquisaId: string, filtros?: DashboardFilters) {
+  const cacheKey = CacheManager.generateKey("dashboard", "resumo-opiniao", pesquisaId, filtros);
+
+  return cacheManager.getOrExecute(
+    cacheKey,
+    () => DashboardWorkflow.obterResumoOpiniaoDashboard(pesquisaId, filtros),
+    { ttl: CACHE_CONFIG.RESUMO_OPINIAO },
+  );
+}
+
+export async function obterParticipantesOpiniaoDashboard(pesquisaId: string, filtros?: DashboardFilters) {
+  const cacheKey = CacheManager.generateKey("dashboard", "participantes-opiniao", pesquisaId, filtros);
+
+  return cacheManager.getOrExecute(
+    cacheKey,
+    () => DashboardWorkflow.obterParticipantesOpiniaoDashboard(pesquisaId, filtros),
+    { ttl: CACHE_CONFIG.PARTICIPANTES_OPINIAO },
+  );
+}
+
 /**
  * Funções de invalidação de cache
  * Use quando dados são atualizados manualmente
@@ -187,6 +220,26 @@ export function invalidateAnaliseBigFive() {
 
 export function invalidateRelatorioBigFive() {
   cacheManager.invalidateByPattern("dashboard::relatorio-bigfive*");
+}
+
+export function invalidatePesquisasOpiniao() {
+  cacheManager.invalidateByPattern("dashboard::pesquisas-opiniao*");
+}
+
+export function invalidateResumoOpiniao(pesquisaId?: string) {
+  if (pesquisaId) {
+    cacheManager.invalidateByPattern(`dashboard::resumo-opiniao::${pesquisaId}*`);
+  } else {
+    cacheManager.invalidateByPattern("dashboard::resumo-opiniao*");
+  }
+}
+
+export function invalidateParticipantesOpiniao(pesquisaId?: string) {
+  if (pesquisaId) {
+    cacheManager.invalidateByPattern(`dashboard::participantes-opiniao::${pesquisaId}*`);
+  } else {
+    cacheManager.invalidateByPattern("dashboard::participantes-opiniao*");
+  }
 }
 
 /**

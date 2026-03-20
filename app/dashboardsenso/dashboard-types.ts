@@ -137,3 +137,47 @@ export type DashboardBigFiveResumo = {
   }>;
   paginacao?: { limit: number; offset: number; temMais: boolean };
 };
+
+export type DashboardPesquisaOpiniao = {
+  id: string;
+  titulo: string;
+  descricao?: string | null;
+  ativo?: boolean;
+  criadoEm?: string;
+};
+
+export type DashboardOpiniaoResumo = {
+  id: string;
+  titulo: string;
+  descricao?: string | null;
+  totalRespostasFiltradas: number;
+  filtrosAplicados?: DashboardFilters;
+  resultado: Array<{
+    id: string;
+    texto: string;
+    opcoes: Array<{
+      id: string;
+      texto: string;
+      total: number;
+    }>;
+  }>;
+};
+
+export type DashboardOpiniaoParticipante = {
+  id: string;
+  respondidoEm?: string;
+  estado?: string | null;
+  cidade?: string | null;
+  bairro?: string | null;
+  participante?: { id?: string; nome?: string | null; contatoOpcional?: string | null };
+  entrevistador?: { id?: string; nome?: string | null; email?: string | null };
+};
+
+export type DashboardOpiniaoParticipantes = {
+  pesquisaId: string;
+  total: number;
+  totalFiltrado: number;
+  filtrosAplicados?: DashboardFilters;
+  paginacao?: { limit: number; offset: number; temMais: boolean };
+  respostas: DashboardOpiniaoParticipante[];
+};

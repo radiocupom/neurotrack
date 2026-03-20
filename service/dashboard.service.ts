@@ -42,6 +42,15 @@ export function listarPesquisasSensoDashboardFromExternalApi(token: string) {
   });
 }
 
+export function listarPesquisasOpiniaoDashboardFromExternalApi(token: string) {
+  return externalApiRequest<unknown>("/dashboard/pesquisas/opiniao", {
+    method: "GET",
+    token,
+    requiresAuth: true,
+    requiresPrivateToken: true,
+  });
+}
+
 export function obterResumoSensoDashboardFromExternalApi(
   token: string,
   questionarioId: string,
@@ -101,6 +110,40 @@ export function obterResumoBigFiveDashboardFromExternalApi(token: string, query?
     requiresAuth: true,
     requiresPrivateToken: true,
   });
+}
+
+export function obterResumoOpiniaoDashboardFromExternalApi(
+  token: string,
+  pesquisaId: string,
+  query?: DashboardQuery,
+) {
+  return externalApiRequest<unknown>(
+    `/dashboard/resultado/opiniao/${encodeURIComponent(pesquisaId)}`,
+    {
+      method: "GET",
+      token,
+      query: normalizeQuery(query),
+      requiresAuth: true,
+      requiresPrivateToken: true,
+    },
+  );
+}
+
+export function obterParticipantesOpiniaoDashboardFromExternalApi(
+  token: string,
+  pesquisaId: string,
+  query?: DashboardQuery,
+) {
+  return externalApiRequest<unknown>(
+    `/dashboard/resultado/opiniao/${encodeURIComponent(pesquisaId)}/participantes`,
+    {
+      method: "GET",
+      token,
+      query: normalizeQuery(query),
+      requiresAuth: true,
+      requiresPrivateToken: true,
+    },
+  );
 }
 
 export function obterAnaliseBigFiveDashboardFromExternalApi(token: string, query?: DashboardQuery) {

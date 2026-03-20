@@ -149,6 +149,14 @@ export async function listarQuestionariosSenso() {
   );
 }
 
+export async function listarPesquisasOpiniaoDashboard() {
+  return requestLocalApi<unknown[]>(
+    "/api/dashboard/pesquisas/opiniao",
+    { method: "GET" },
+    "Falha ao carregar pesquisas do dashboard de opiniao.",
+  );
+}
+
 export async function obterResumoSenso(questionarioId: string, filtros?: DashboardFilters) {
   return requestLocalApi<unknown>(
     withFilters(`/api/dashboard/resultado/senso-populacional/${encodeURIComponent(questionarioId)}`, filtros),
@@ -186,6 +194,22 @@ export async function obterResumoBigFive(filtros?: DashboardFilters) {
     withFilters("/api/dashboard/resultado/bigfive", filtros),
     { method: "GET" },
     "Falha ao carregar resumo do dashboard Big Five.",
+  );
+}
+
+export async function obterResumoOpiniaoDashboard(pesquisaId: string, filtros?: DashboardFilters) {
+  return requestLocalApi<unknown>(
+    withFilters(`/api/dashboard/resultado/opiniao/${encodeURIComponent(pesquisaId)}`, filtros),
+    { method: "GET" },
+    "Falha ao carregar resumo do dashboard de opiniao.",
+  );
+}
+
+export async function obterParticipantesOpiniaoDashboard(pesquisaId: string, filtros?: DashboardFilters) {
+  return requestLocalApi<unknown>(
+    withFilters(`/api/dashboard/resultado/opiniao/${encodeURIComponent(pesquisaId)}/participantes`, filtros),
+    { method: "GET" },
+    "Falha ao carregar participantes do dashboard de opiniao.",
   );
 }
 
