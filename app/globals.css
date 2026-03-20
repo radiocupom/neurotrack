@@ -120,8 +120,17 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    scroll-behavior: smooth;
+  }
   body {
     @apply bg-background text-foreground;
+    min-height: 100vh;
+    background-attachment: fixed;
+  }
+  body::selection {
+    background: color-mix(in oklch, var(--color-primary) 55%, white 0%);
+    color: var(--color-primary-foreground);
   }
   html {
     @apply font-sans;
