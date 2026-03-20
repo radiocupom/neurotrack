@@ -7,7 +7,7 @@ import {
   obterParticipantesOpiniaoDashboardAction,
   obterResumoOpiniaoDashboardAction,
 } from "@/app/dashboardsenso/opiniao-actions";
-import type { DashboardFilters } from "@/service/dashboard-workflow.service";
+import type { DashboardFilters } from "@/service/dashboard-filters";
 import type {
   DashboardOpiniaoParticipantes,
   DashboardOpiniaoResumo,

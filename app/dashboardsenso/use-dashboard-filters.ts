@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from "react";
 
-import type { DashboardFilters } from "@/service/dashboard-workflow.service";
-import { serializeDashboardFilters } from "@/service/dashboard-workflow.service";
+import type { DashboardFilters } from "@/service/dashboard-filters";
+import { serializeDashboardFilters } from "@/service/dashboard-filters";
 
 export type DashboardModulo = "senso" | "bigfive" | "opiniao";
 

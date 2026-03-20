@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
-  listarQuestionariosSenso,
-  obterRelatorioSenso,
-  obterParticipantesSenso,
-  obterResumoSenso,
+  listarQuestionariosSensoAction,
+  obterRelatorioSensoAction,
+  obterParticipantesSensoAction,
+  obterResumoSensoAction,
+} from "@/app/dashboardsenso/dashboard-actions";
+import {
   type DashboardFilters,
-} from "@/lib/cache/cached-dashboard-workflow";
+} from "@/service/dashboard-filters";
 import type {
   DashboardAnaliseIa,
   DashboardQuestionarioSenso,
@@ -128,7 +130,7 @@ export function useSensoDashboard(filters: DashboardFilters) {
   const canLoad = Boolean(questionarioId);
 
   const loadQuestionarios = useCallback(async () => {
-    const result = await listarQuestionariosSenso();
+    const result = await listarQuestionariosSensoAction();
     if (!result.ok) {
       throw new Error(result.message || "Falha ao carregar questionarios do dashboard.");
     }
@@ -151,8 +153,8 @@ export function useSensoDashboard(filters: DashboardFilters) {
 
     try {
       const [resumoResult, participantesResult] = await Promise.all([
-        obterResumoSenso(questionarioId, filters),
-        obterParticipantesSenso(questionarioId, filters),
+        obterResumoSensoAction(questionarioId, filters),
+        obterParticipantesSensoAction(questionarioId, filters),
       ]);
 
       if (!resumoResult.ok) throw new Error(resumoResult.message || "Falha ao carregar resumo de senso.");
@@ -172,7 +174,7 @@ export function useSensoDashboard(filters: DashboardFilters) {
       return;
     }
 
-    const result = await obterRelatorioSenso(questionarioId, filters);
+    const result = await obterRelatorioSensoAction(questionarioId, filters);
     if (!result.ok) {
       throw new Error(result.message || "Falha ao carregar relatorio IA de senso.");
     }

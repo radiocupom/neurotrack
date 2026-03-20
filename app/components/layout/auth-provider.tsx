@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { DEFAULT_LOGIN_REDIRECT } from "@/lib/auth/constants";
 import type { AuthUser } from "@/lib/auth/types";
+import { loginAction, logoutAction } from "@/app/components/layout/auth-actions";
 
 type LoginCredentials = {
   email: string;
@@ -41,20 +42,9 @@ export function AuthProvider({
     setIsBusy(true);
 
     try {
-      const response = await fetch("/api/session/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(credentials),
-      });
+      const payload = await loginAction(credentials);
 
-      const payload = (await response.json().catch(() => null)) as {
-        message?: string;
-        user?: AuthUser;
-      } | null;
-
-      if (!response.ok || !payload?.user) {
+      if (!payload.ok || !payload.user) {
         return {
           ok: false,
           message: payload?.message ?? "Nao foi possivel concluir o login.",
@@ -79,9 +69,7 @@ export function AuthProvider({
     setIsBusy(true);
 
     try {
-      await fetch("/api/session/logout", {
-        method: "POST",
-      });
+      await logoutAction();
 
       setUser(null);
       setModalOpen(false);

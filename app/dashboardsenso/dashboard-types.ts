@@ -1,4 +1,4 @@
-import type { DashboardFilters } from "@/service/dashboard-workflow.service";
+import type { DashboardFilters } from "@/service/dashboard-filters";
 
 export type DashboardQuestionarioSenso = {
   id: string;

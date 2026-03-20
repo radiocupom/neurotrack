@@ -457,7 +457,7 @@ export async function buscarParticipantePorContato(
 
 /**
  * Identificar/criar participante (público)
- * POST /api/participantes/identificar - cria ou reaproveita por telefone
+ * POST /participantes/identificar na API externa - cria ou reaproveita por telefone
  */
 export async function identificarParticipantePublico(payload: {
   nome: string;
@@ -545,7 +545,7 @@ export async function criarParticipante(
 
 /**
  * Responder pesquisa (fluxo privado - entrevistador)
- * POST /api/pesquisa-de-opniao/responder
+ * POST /pesquisa-de-opniao/responder na API externa
  * 
  * Pode retornar:
  * - 201: resposta registrada
@@ -614,7 +614,7 @@ export async function responderPesquisaPrivada(
 
 /**
  * Responder pesquisa (fluxo público)
- * POST /api/pesquisa-de-opniao/:id/responder-publico
+ * POST /pesquisa-de-opniao/:id/responder-publico na API externa
  * 
  * Pode retornar:
  * - 201: sucesso

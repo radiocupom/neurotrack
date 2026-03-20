@@ -5,6 +5,11 @@ import { Pencil, Plus, ShieldCheck, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { AuthUser, UserRole } from "@/lib/auth/types";
+import {
+  atualizarUsuarioAction,
+  criarUsuarioAction,
+  listarUsuariosAction,
+} from "@/app/usuariosdosistema/usuarios-actions";
 
 type SistemaUser = {
   id: string;
@@ -26,10 +31,6 @@ export type UsuariosWorkflowProps = {
   loggedUser: AuthUser;
   activeView: "usuarios-listar" | "usuarios-cadastrar" | "usuarios-editar";
   onViewChange: (view: "usuarios-listar" | "usuarios-cadastrar" | "usuarios-editar") => void;
-};
-
-type ApiErrorPayload = {
-  message?: string;
 };
 
 const ADMIN_ROLES: UserRole[] = ["SUPERADMIN", "ADMIN"];
@@ -83,18 +84,14 @@ function normalizeUser(raw: unknown): SistemaUser | null {
   };
 }
 
-async function parseJson(response: Response) {
-  return response.json().catch(() => null);
-}
-
 async function fetchUsuarios() {
-  const response = await fetch("/api/usuarios", { method: "GET" });
-  const data = await parseJson(response);
+  const result = await listarUsuariosAction();
 
-  if (!response.ok) {
-    const payload = data as ApiErrorPayload | null;
-    throw new Error(payload?.message ?? "Nao foi possivel listar usuarios.");
+  if (!result.ok) {
+    throw new Error(result.message || "Nao foi possivel listar usuarios.");
   }
+
+  const data = result.data;
 
   if (!Array.isArray(data)) {
     return [] as SistemaUser[];
@@ -104,20 +101,13 @@ async function fetchUsuarios() {
 }
 
 async function createUsuario(payload: UserFormInput) {
-  const response = await fetch("/api/usuarios", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  const result = await criarUsuarioAction(payload);
 
-  const data = await parseJson(response);
-
-  if (!response.ok) {
-    const errorPayload = data as ApiErrorPayload | null;
-    throw new Error(errorPayload?.message ?? "Nao foi possivel cadastrar usuario.");
+  if (!result.ok) {
+    throw new Error(result.message || "Nao foi possivel cadastrar usuario.");
   }
 
-  const user = normalizeUser(data);
+  const user = normalizeUser(result.data);
   if (!user) {
     throw new Error("Resposta de cadastro invalida.");
   }
@@ -126,20 +116,13 @@ async function createUsuario(payload: UserFormInput) {
 }
 
 async function updateUsuario(id: string, payload: UserFormInput) {
-  const response = await fetch(`/api/usuarios/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  const result = await atualizarUsuarioAction(id, payload);
 
-  const data = await parseJson(response);
-
-  if (!response.ok) {
-    const errorPayload = data as ApiErrorPayload | null;
-    throw new Error(errorPayload?.message ?? "Nao foi possivel editar usuario.");
+  if (!result.ok) {
+    throw new Error(result.message || "Nao foi possivel editar usuario.");
   }
 
-  const user = normalizeUser(data);
+  const user = normalizeUser(result.data);
   if (!user) {
     throw new Error("Resposta de edicao invalida.");
   }

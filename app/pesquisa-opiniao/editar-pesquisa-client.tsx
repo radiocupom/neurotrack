@@ -8,7 +8,7 @@ import {
   excluirPesquisaOpiniao,
   listarPesquisasOpiniao,
   obterPesquisaOpiniao,
-} from "@/service/pesquisa-opiniao-workflow.service";
+} from "@/app/pesquisa-opiniao/workflow-actions";
 import type { PesquisaDetalhe, PesquisaOpiniao } from "@/types/pesquisa-opiniao";
 
 type OpcaoDraft = {

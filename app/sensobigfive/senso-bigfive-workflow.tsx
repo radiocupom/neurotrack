@@ -23,12 +23,12 @@ import {
 	carregarQuestionarioSenso,
 	criarCampanha,
 	criarParticipante,
-	carregarQuestionarioBigFive,
+	carregarQuestionarioBigFiveAction,
 	enviarBigFive,
 	enviarSenso,
 	precheckJornada,
 	type QuestionarioSensoBase,
-} from "@/service/jornada-workflow.service";
+} from "@/app/sensobigfive/jornada-actions";
 import {
 	carregarBairrosPorMunicipio,
 	carregarCidadesPorUf,
@@ -800,7 +800,7 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 			setBigFiveQuestionarioError("");
 
 			try {
-				const result = await carregarQuestionarioBigFive();
+				const result = await carregarQuestionarioBigFiveAction();
 				if (!result.ok) {
 					throw new Error(result.message || "Falha ao carregar questionario Big Five.");
 				}

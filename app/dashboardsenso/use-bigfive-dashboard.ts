@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
-  obterRelatorioBigFive,
-  obterResumoBigFive,
+  obterRelatorioBigFiveAction,
+  obterResumoBigFiveAction,
+} from "@/app/dashboardsenso/dashboard-actions";
+import {
   type DashboardFilters,
-} from "@/lib/cache/cached-dashboard-workflow";
+} from "@/service/dashboard-filters";
 import type { DashboardAnaliseIa, DashboardBigFiveResumo } from "@/app/dashboardsenso/dashboard-types";
 
 type LoadState = "idle" | "loading" | "success" | "error";
@@ -38,7 +40,7 @@ export function useBigFiveDashboard(filters: DashboardFilters) {
     setError("");
 
     try {
-      const resumoResult = await obterResumoBigFive(filters);
+      const resumoResult = await obterResumoBigFiveAction(filters);
 
       if (!resumoResult.ok) throw new Error(resumoResult.message || "Falha ao carregar dashboard Big Five.");
 
@@ -51,7 +53,7 @@ export function useBigFiveDashboard(filters: DashboardFilters) {
   }, [filters]);
 
   const refetchAnaliseIa = useCallback(async () => {
-    const result = await obterRelatorioBigFive(filters);
+    const result = await obterRelatorioBigFiveAction(filters);
     if (!result.ok) {
       throw new Error(result.message || "Falha ao carregar relatorio IA Big Five.");
     }

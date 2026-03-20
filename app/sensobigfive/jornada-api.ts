@@ -1,7 +1,7 @@
 export {
   buscarParticipantePorContato,
   carregarCampanhas,
-  carregarQuestionarioBigFive,
+  carregarQuestionarioBigFiveAction,
   carregarQuestionariosPrivados,
   carregarQuestionarioSenso,
   criarCampanha,
@@ -10,10 +10,10 @@ export {
   enviarSenso,
   obterResultadoBigFive,
   precheckJornada,
-} from "@/service/jornada-workflow.service";
+} from "@/app/sensobigfive/jornada-actions";
 
 export type {
   ApiResult,
   QuestionarioSensoBase,
   SensoPergunta,
-} from "@/service/jornada-workflow.service";
+} from "@/app/sensobigfive/jornada-actions";

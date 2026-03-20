@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   obterPesquisaOpiniao,
   responderPesquisaOpiniaoPrivada,
-} from "@/service/pesquisa-opiniao-workflow.service";
+} from "@/app/pesquisa-opiniao/workflow-actions";
 import { buscarOuCriarParticipantePrivadoAction } from "@/app/pesquisa-opiniao/actions";
 import {
   normalizarParticipante,

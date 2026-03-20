@@ -6,7 +6,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { listarPesquisasOpiniao } from "@/service/pesquisa-opiniao-workflow.service";
+import { listarPesquisasOpiniao } from "@/app/pesquisa-opiniao/workflow-actions";
 import type { PesquisaOpiniao } from "@/types/pesquisa-opiniao";
 
 interface UsePesquisasOpiniaoParams {

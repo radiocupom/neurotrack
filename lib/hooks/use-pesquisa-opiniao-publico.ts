@@ -17,7 +17,7 @@ import {
   identificarParticipanteOpiniaoPublico,
   obterPesquisaOpiniao,
   responderPesquisaOpiniaoPublica,
-} from "@/service/pesquisa-opiniao-workflow.service";
+} from "@/app/pesquisa-opiniao/workflow-actions";
 import {
   normalizarParticipante,
   validarParticipante,

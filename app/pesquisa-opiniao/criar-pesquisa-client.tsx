@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 
 import { Alert, Button, Card, Input } from "@/app/components/ui-primitives";
 import { useAuth } from "@/app/components/layout/auth-provider";
-import { criarPesquisaOpiniao } from "@/service/pesquisa-opiniao-workflow.service";
+import { criarPesquisaOpiniao } from "@/app/pesquisa-opiniao/workflow-actions";
 import type { CriarPesquisaOpiniaoPayload } from "@/types/pesquisa-opiniao";
 
 type OpcaoDraft = {
