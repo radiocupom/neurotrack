@@ -8,7 +8,7 @@ import {
   obterParticipantesSenso,
   obterResumoSenso,
   type DashboardFilters,
-} from "@/service/dashboard-workflow.service";
+} from "@/lib/cache/cached-dashboard-workflow";
 import type {
   DashboardAnaliseIa,
   DashboardQuestionarioSenso,

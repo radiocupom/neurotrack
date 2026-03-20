@@ -7,6 +7,10 @@ import { Sidebar } from "@/app/components/layout/sidebar";
 import { SensoBigFiveWorkflow } from "../sensobigfive/senso-bigfive-workflow";
 import { DashboardSensoBigFive } from "../dashboardsenso/dashboard-senso-bigfive";
 import { UsuariosWorkflow } from "../usuariosdosistema/usuarios-workflow";
+import { ListaPesquisasClient } from "@/app/pesquisa-opiniao/lista-pesquisas-client";
+import { ResponderPesquisaPrivadoClient } from "@/app/pesquisa-opiniao/responder/responder-privado-client";
+import { CriarPesquisaClient } from "@/app/pesquisa-opiniao/criar-pesquisa-client";
+import { EditarPesquisaClient } from "@/app/pesquisa-opiniao/editar-pesquisa-client";
 
 const ADMIN_ROLES = new Set(["SUPERADMIN", "ADMIN"]);
 
@@ -19,6 +23,10 @@ export function AreaShell({ user }: AreaShellProps) {
   const isUsuariosView = activeView.startsWith("usuarios-");
   const isSensoBigFiveView = activeView === "senso-aplicar" || activeView === "senso-criar-campanha";
   const isDashboardSensoBigFiveView = activeView === "dashboard-senso";
+  const isOpiniaoListView = activeView === "opiniao-listar";
+  const isOpiniaoAplicarView = activeView === "opiniao-aplicar";
+  const isOpiniaoCriarView = activeView === "opiniao-criar";
+  const isOpiniaoEditarView = activeView === "opiniao-editar";
 
   return (
     <div className="relative flex flex-1 overflow-hidden">
@@ -40,6 +48,14 @@ export function AreaShell({ user }: AreaShellProps) {
             loggedUser={user}
             mode={activeView === "senso-criar-campanha" ? "campanhas" : "aplicar"}
           />
+        ) : isOpiniaoListView ? (
+          <ListaPesquisasClient />
+        ) : isOpiniaoAplicarView ? (
+          <ResponderPesquisaPrivadoClient />
+        ) : isOpiniaoCriarView ? (
+          <CriarPesquisaClient />
+        ) : isOpiniaoEditarView ? (
+          <EditarPesquisaClient />
         ) : isDashboardSensoBigFiveView ? (
           <DashboardSensoBigFive loggedUser={user} />
         ) : activeView ? (
@@ -100,12 +116,12 @@ function WelcomeView({
   );
 }
 
-function ContentPlaceholder({ view }: { view: string }) {
+function ContentPlaceholder({ view, message }: { view: string; message?: string }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 p-10 text-center">
       <div className="flex h-40 w-full max-w-2xl items-center justify-center rounded-2xl border border-dashed border-white/20 bg-white/5">
         <p className="text-sm text-slate-400">
-          Funcionalidade em construção:{" "}
+          {message ?? "Funcionalidade em construção:"}{" "}
           <span className="font-semibold text-cyan-300">{view}</span>
         </p>
       </div>
