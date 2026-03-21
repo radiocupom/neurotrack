@@ -8,6 +8,7 @@ import { SensoBigFiveWorkflow } from "../sensobigfive/senso-bigfive-workflow";
 import { DashboardSensoBigFive } from "../dashboardsenso/dashboard-senso-bigfive";
 import { DashboardOpiniao } from "../dashboardsenso/dashboard-opiniao";
 import { DashboardVoto } from "../dashboardsenso/dashboard-voto";
+import { DashboardEntrevistadores } from "../dashboardsenso/dashboard-entrevistadores";
 import { UsuariosWorkflow } from "../usuariosdosistema/usuarios-workflow";
 import { ListaPesquisasClient } from "@/app/pesquisa-opiniao/lista-pesquisas-client";
 import { ResponderPesquisaPrivadoClient } from "@/app/pesquisa-opiniao/responder/responder-privado-client";
@@ -31,6 +32,7 @@ export function AreaShell({ user }: AreaShellProps) {
   const isDashboardSensoBigFiveView = activeView === "dashboard-senso";
   const isDashboardOpiniaoView = activeView === "dashboard-opiniao";
   const isDashboardVotoView = activeView === "dashboard-voto";
+  const isDashboardEntrevistadoresView = activeView === "dashboard-entrevistadores";
   const isOpiniaoListView = activeView === "opiniao-listar";
   const isOpiniaoAplicarView = activeView === "opiniao-aplicar";
   const isOpiniaoCriarView = activeView === "opiniao-criar";
@@ -82,6 +84,8 @@ export function AreaShell({ user }: AreaShellProps) {
           <DashboardOpiniao loggedUser={user} />
         ) : isDashboardVotoView ? (
           <DashboardVoto loggedUser={user} />
+        ) : isDashboardEntrevistadoresView ? (
+          <DashboardEntrevistadores loggedUser={user} />
         ) : activeView ? (
           <ContentPlaceholder view={activeView} />
         ) : (

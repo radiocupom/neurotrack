@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   Bar,
@@ -19,6 +19,12 @@ import { useBigFiveDashboard } from "@/app/dashboardsenso/use-bigfive-dashboard"
 import { useDashboardFilters } from "@/app/dashboardsenso/use-dashboard-filters";
 import { useDashboardRealtime } from "@/app/dashboardsenso/use-dashboard-realtime";
 import { useSensoDashboard } from "@/app/dashboardsenso/use-senso-dashboard";
+import {
+  carregarEstadosBrasileiros,
+  carregarCidadesPorUf,
+  type EstadoOption,
+  type CidadeOption,
+} from "@/service/localidades-publicas.service";
 
 export type DashboardSensoBigFiveProps = {
   loggedUser: AuthUser;
@@ -81,10 +87,48 @@ export function DashboardSensoBigFive({ loggedUser }: DashboardSensoBigFiveProps
   const senso = useSensoDashboard(sensoFilters);
   const bigfive = useBigFiveDashboard(bigFiveFilters);
 
+  // ── localidades (IBGE) ───────────────────────────────────────────────────
+  const [estados, setEstados] = useState<EstadoOption[]>([]);
+  const [cidadesSenso, setCidadesSenso] = useState<CidadeOption[]>([]);
+  const [loadingCidadesSenso, setLoadingCidadesSenso] = useState(false);
+  const [cidadesBigFive, setCidadesBigFive] = useState<CidadeOption[]>([]);
+  const [loadingCidadesBigFive, setLoadingCidadesBigFive] = useState(false);
+
+  useEffect(() => {
+    void carregarEstadosBrasileiros().then((result) => {
+      if (result.ok && result.data) setEstados(result.data);
+    });
+  }, []);
+
+  useEffect(() => {
+    const estadoAtual = String(sensoFilters.estado ?? "");
+    if (!estadoAtual) { setCidadesSenso([]); return; }
+    setLoadingCidadesSenso(true);
+    void carregarCidadesPorUf(estadoAtual).then((result) => {
+      setCidadesSenso(result.ok && result.data ? result.data : []);
+      setLoadingCidadesSenso(false);
+    });
+  }, [sensoFilters.estado]);
+
+  useEffect(() => {
+    const estadoAtual = String(bigFiveFilters.estado ?? "");
+    if (!estadoAtual) { setCidadesBigFive([]); return; }
+    setLoadingCidadesBigFive(true);
+    void carregarCidadesPorUf(estadoAtual).then((result) => {
+      setCidadesBigFive(result.ok && result.data ? result.data : []);
+      setLoadingCidadesBigFive(false);
+    });
+  }, [bigFiveFilters.estado]);
+
   const { isConnected } = useDashboardRealtime({
-    onDashboardUpdate: () => {
-      void senso.refetch();
-      void bigfive.refetch();
+    onDashboardUpdate: (module) => {
+      if (!module || module === "senso-populacional") {
+        void senso.refetch();
+      }
+
+      if (!module || module === "bigfive") {
+        void bigfive.refetch();
+      }
     },
     onBigFiveRespostaRegistrada: () => {
       void bigfive.refetch();
@@ -305,22 +349,31 @@ export function DashboardSensoBigFive({ loggedUser }: DashboardSensoBigFiveProps
 
                 <label className="block text-sm text-slate-300">
                   <span className="mb-1 block">Estado</span>
-                  <input
+                  <select
                     value={String(sensoFilters.estado ?? "")}
-                    onChange={(event) => patchFilters("senso", { estado: event.target.value, offset: 0 })}
+                    onChange={(event) => patchFilters("senso", { estado: event.target.value, cidade: "", offset: 0 })}
                     className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                    placeholder="SP"
-                  />
+                  >
+                    <option value="">Todos</option>
+                    {estados.map((e) => (
+                      <option key={e.sigla} value={e.sigla}>{e.sigla} — {e.nome}</option>
+                    ))}
+                  </select>
                 </label>
 
                 <label className="block text-sm text-slate-300">
                   <span className="mb-1 block">Cidade</span>
-                  <input
+                  <select
                     value={String(sensoFilters.cidade ?? "")}
                     onChange={(event) => patchFilters("senso", { cidade: event.target.value, offset: 0 })}
                     className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                    placeholder="Sao Paulo"
-                  />
+                    disabled={!sensoFilters.estado || loadingCidadesSenso}
+                  >
+                    <option value="">{loadingCidadesSenso ? "Carregando..." : "Todas"}</option>
+                    {cidadesSenso.map((c) => (
+                      <option key={c.id} value={c.nome}>{c.nome}</option>
+                    ))}
+                  </select>
                 </label>
 
                 <label className="block text-sm text-slate-300">
@@ -491,19 +544,30 @@ export function DashboardSensoBigFive({ loggedUser }: DashboardSensoBigFiveProps
                 </label>
                 <label className="block text-sm text-slate-300">
                   <span className="mb-1 block">Estado</span>
-                  <input
+                  <select
                     value={String(bigFiveFilters.estado ?? "")}
-                    onChange={(event) => patchFilters("bigfive", { estado: event.target.value, offset: 0 })}
+                    onChange={(event) => patchFilters("bigfive", { estado: event.target.value, cidade: "", offset: 0 })}
                     className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                  />
+                  >
+                    <option value="">Todos</option>
+                    {estados.map((e) => (
+                      <option key={e.sigla} value={e.sigla}>{e.sigla} — {e.nome}</option>
+                    ))}
+                  </select>
                 </label>
                 <label className="block text-sm text-slate-300">
                   <span className="mb-1 block">Cidade</span>
-                  <input
+                  <select
                     value={String(bigFiveFilters.cidade ?? "")}
                     onChange={(event) => patchFilters("bigfive", { cidade: event.target.value, offset: 0 })}
                     className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                  />
+                    disabled={!bigFiveFilters.estado || loadingCidadesBigFive}
+                  >
+                    <option value="">{loadingCidadesBigFive ? "Carregando..." : "Todas"}</option>
+                    {cidadesBigFive.map((c) => (
+                      <option key={c.id} value={c.nome}>{c.nome}</option>
+                    ))}
+                  </select>
                 </label>
                 <label className="block text-sm text-slate-300">
                   <span className="mb-1 block">Questionario Senso ID</span>

@@ -39,9 +39,126 @@ type IbgeLocalidadeNomeada = {
   nome: string;
 };
 
-let estadosCache: Promise<ApiResult<EstadoOption[]>> | null = null;
-const cidadesCache = new Map<string, Promise<ApiResult<CidadeOption[]>>>();
-const bairrosCache = new Map<number, Promise<ApiResult<BairroOption[]>>>();
+type TimedCacheEntry<T> = {
+  value: Promise<ApiResult<T>>;
+  expiresAt: number;
+  lastAccessAt: number;
+};
+
+function readPositiveIntEnv(name: string, fallback: number) {
+  const rawValue = process.env[name];
+  if (!rawValue) {
+    return fallback;
+  }
+
+  const parsedValue = Number.parseInt(rawValue, 10);
+  if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+    return fallback;
+  }
+
+  return parsedValue;
+}
+
+const ESTADOS_CACHE_TTL_MS = readPositiveIntEnv(
+  "NEXT_PUBLIC_LOCALIDADES_CACHE_ESTADOS_TTL_MS",
+  30 * 60 * 1000,
+);
+const CIDADES_CACHE_TTL_MS = readPositiveIntEnv(
+  "NEXT_PUBLIC_LOCALIDADES_CACHE_CIDADES_TTL_MS",
+  10 * 60 * 1000,
+);
+const BAIRROS_CACHE_TTL_MS = readPositiveIntEnv(
+  "NEXT_PUBLIC_LOCALIDADES_CACHE_BAIRROS_TTL_MS",
+  5 * 60 * 1000,
+);
+const MAX_CIDADES_CACHE_ENTRIES = readPositiveIntEnv(
+  "NEXT_PUBLIC_LOCALIDADES_CACHE_MAX_CIDADES",
+  30,
+);
+const MAX_BAIRROS_CACHE_ENTRIES = readPositiveIntEnv(
+  "NEXT_PUBLIC_LOCALIDADES_CACHE_MAX_BAIRROS",
+  80,
+);
+
+let estadosCache: TimedCacheEntry<EstadoOption[]> | null = null;
+const cidadesCache = new Map<string, TimedCacheEntry<CidadeOption[]>>();
+const bairrosCache = new Map<number, TimedCacheEntry<BairroOption[]>>();
+
+function now() {
+  return Date.now();
+}
+
+function isExpired(expiresAt: number, timestamp: number) {
+  return timestamp >= expiresAt;
+}
+
+function touchEntry<T>(entry: TimedCacheEntry<T>, timestamp: number) {
+  entry.lastAccessAt = timestamp;
+}
+
+function getCachedEntry<K, T>(
+  cache: Map<K, TimedCacheEntry<T>>,
+  key: K,
+): Promise<ApiResult<T>> | null {
+  const entry = cache.get(key);
+  if (!entry) {
+    return null;
+  }
+
+  const timestamp = now();
+  if (isExpired(entry.expiresAt, timestamp)) {
+    cache.delete(key);
+    return null;
+  }
+
+  touchEntry(entry, timestamp);
+  return entry.value;
+}
+
+function pruneExpiredEntries<K, T>(cache: Map<K, TimedCacheEntry<T>>, timestamp: number) {
+  for (const [key, entry] of cache.entries()) {
+    if (isExpired(entry.expiresAt, timestamp)) {
+      cache.delete(key);
+    }
+  }
+}
+
+function enforceMaxEntries<K, T>(cache: Map<K, TimedCacheEntry<T>>, maxEntries: number) {
+  if (cache.size <= maxEntries) {
+    return;
+  }
+
+  const sortedEntries = [...cache.entries()].sort(
+    (first, second) => first[1].lastAccessAt - second[1].lastAccessAt,
+  );
+
+  const overflowCount = cache.size - maxEntries;
+  for (let index = 0; index < overflowCount; index += 1) {
+    const keyToDelete = sortedEntries[index]?.[0];
+    if (keyToDelete !== undefined) {
+      cache.delete(keyToDelete);
+    }
+  }
+}
+
+function setCachedEntry<K, T>(
+  cache: Map<K, TimedCacheEntry<T>>,
+  key: K,
+  value: Promise<ApiResult<T>>,
+  ttlMs: number,
+  maxEntries: number,
+) {
+  const timestamp = now();
+  pruneExpiredEntries(cache, timestamp);
+
+  cache.set(key, {
+    value,
+    expiresAt: timestamp + ttlMs,
+    lastAccessAt: timestamp,
+  });
+
+  enforceMaxEntries(cache, maxEntries);
+}
 
 export function resetLocalidadesPublicasCacheForTests() {
   estadosCache = null;
@@ -148,8 +265,13 @@ function normalizeBairros(payload: IbgeLocalidadeNomeada[] | null): BairroOption
 }
 
 export async function carregarEstadosBrasileiros() {
-  if (!estadosCache) {
-    estadosCache = (async () => {
+  const timestamp = now();
+  if (estadosCache && !isExpired(estadosCache.expiresAt, timestamp)) {
+    touchEntry(estadosCache, timestamp);
+    return estadosCache.value;
+  }
+
+  const value = (async () => {
       const result = await requestPublicApi<IbgeEstado[]>(
         "/estados?orderBy=nome",
         "Falha ao carregar estados na API publica do IBGE.",
@@ -166,18 +288,24 @@ export async function carregarEstadosBrasileiros() {
         message: "ok",
       } satisfies ApiResult<EstadoOption[]>;
     })();
-  }
 
-  return estadosCache;
+  estadosCache = {
+    value,
+    expiresAt: timestamp + ESTADOS_CACHE_TTL_MS,
+    lastAccessAt: timestamp,
+  };
+
+  return value;
 }
 
 export async function carregarCidadesPorUf(siglaUf: string) {
   const key = siglaUf.trim().toUpperCase();
+  const cached = getCachedEntry(cidadesCache, key);
+  if (cached) {
+    return cached;
+  }
 
-  if (!cidadesCache.has(key)) {
-    cidadesCache.set(
-      key,
-      (async () => {
+  const value = (async () => {
         const estadosResult = await carregarEstadosBrasileiros();
 
         if (!estadosResult.ok || !estadosResult.data) {
@@ -215,11 +343,17 @@ export async function carregarCidadesPorUf(siglaUf: string) {
           data: normalizeCidades(result.data),
           message: "ok",
         } satisfies ApiResult<CidadeOption[]>;
-      })(),
-    );
-  }
+      })();
 
-  return cidadesCache.get(key) as Promise<ApiResult<CidadeOption[]>>;
+  setCachedEntry(
+    cidadesCache,
+    key,
+    value,
+    CIDADES_CACHE_TTL_MS,
+    MAX_CIDADES_CACHE_ENTRIES,
+  );
+
+  return value;
 }
 
 async function carregarSubdistritosPorMunicipio(municipioId: number) {
@@ -230,10 +364,12 @@ async function carregarSubdistritosPorMunicipio(municipioId: number) {
 }
 
 export async function carregarBairrosPorMunicipio(municipioId: number) {
-  if (!bairrosCache.has(municipioId)) {
-    bairrosCache.set(
-      municipioId,
-      (async () => {
+  const cached = getCachedEntry(bairrosCache, municipioId);
+  if (cached) {
+    return cached;
+  }
+
+  const value = (async () => {
         const subdistritosResult = await carregarSubdistritosPorMunicipio(municipioId);
 
         if (!subdistritosResult.ok) {
@@ -253,9 +389,15 @@ export async function carregarBairrosPorMunicipio(municipioId: number) {
           data: bairros,
           message: bairros.length > 0 ? "ok" : "Nenhum bairro publico foi encontrado para este municipio.",
         } satisfies ApiResult<BairroOption[]>;
-      })(),
-    );
-  }
+      })();
 
-  return bairrosCache.get(municipioId) as Promise<ApiResult<BairroOption[]>>;
+  setCachedEntry(
+    bairrosCache,
+    municipioId,
+    value,
+    BAIRROS_CACHE_TTL_MS,
+    MAX_BAIRROS_CACHE_ENTRIES,
+  );
+
+  return value;
 }

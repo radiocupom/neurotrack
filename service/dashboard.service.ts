@@ -172,3 +172,70 @@ export function obterAnaliseBigFiveDashboardFromExternalApi(token: string, query
     requiresPrivateToken: true,
   });
 }
+
+export function obterResumoVotoDashboardFromExternalApi(
+  token: string,
+  pesquisaId: string,
+  query?: DashboardQuery,
+) {
+  return externalApiRequest<unknown>(
+    `/dashboard/resultado/intencao/${encodeURIComponent(pesquisaId)}`,
+    {
+      method: "GET",
+      token,
+      query: normalizeQuery(query),
+      requiresAuth: true,
+      requiresPrivateToken: true,
+    },
+  );
+}
+
+export function obterParticipantesVotoDashboardFromExternalApi(
+  token: string,
+  pesquisaId: string,
+  query?: DashboardQuery,
+) {
+  return externalApiRequest<unknown>(
+    `/dashboard/resultado/intencao/${encodeURIComponent(pesquisaId)}/participantes`,
+    {
+      method: "GET",
+      token,
+      query: normalizeQuery(query),
+      requiresAuth: true,
+      requiresPrivateToken: true,
+    },
+  );
+}
+
+export function obterAuditoriaEntrevistadoresDashboardFromExternalApi(
+  token: string,
+  query?: DashboardQuery,
+) {
+  return externalApiRequest<unknown>(
+    "/dashboard/auditoria/entrevistadores",
+    {
+      method: "GET",
+      token,
+      query: normalizeQuery(query),
+      requiresAuth: true,
+      requiresPrivateToken: true,
+    },
+  );
+}
+
+export function obterPesquisasEntrevistadorDashboardFromExternalApi(
+  token: string,
+  entrevistadorId: string,
+  query?: DashboardQuery,
+) {
+  return externalApiRequest<unknown>(
+    `/dashboard/auditoria/entrevistadores/${encodeURIComponent(entrevistadorId)}/pesquisas`,
+    {
+      method: "GET",
+      token,
+      query: normalizeQuery(query),
+      requiresAuth: true,
+      requiresPrivateToken: true,
+    },
+  );
+}

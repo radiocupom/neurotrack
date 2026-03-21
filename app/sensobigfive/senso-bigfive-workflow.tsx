@@ -30,10 +30,8 @@ import {
 	type QuestionarioSensoBase,
 } from "@/app/sensobigfive/jornada-actions";
 import {
-	carregarBairrosPorMunicipio,
 	carregarCidadesPorUf,
 	carregarEstadosBrasileiros,
-	type BairroOption,
 	type CidadeOption,
 	type EstadoOption,
 } from "@/service/localidades-publicas.service";
@@ -338,14 +336,11 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 	const [estado, setEstado] = useState("SP");
 	const [cidade, setCidade] = useState("");
 	const [bairro, setBairro] = useState("");
-	const [bairroId, setBairroId] = useState("");
 	const [cidadeId, setCidadeId] = useState<number | null>(null);
 	const [estados, setEstados] = useState<EstadoOption[]>([]);
 	const [cidades, setCidades] = useState<CidadeOption[]>([]);
-	const [bairros, setBairros] = useState<BairroOption[]>([]);
 	const [loadingEstados, setLoadingEstados] = useState(false);
 	const [loadingCidades, setLoadingCidades] = useState(false);
-	const [loadingBairros, setLoadingBairros] = useState(false);
 	const [respostasSenso, setRespostasSenso] = useState<Record<string, string>>({});
 	const [scores, setScores] = useState<Record<ScoreKey, number>>(DEFAULT_BIGFIVE);
 
@@ -456,9 +451,7 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 		setCidade("");
 		setCidadeId(null);
 		setBairro("");
-		setBairroId("");
 		setCidades([]);
-		setBairros([]);
 		setRespostasSenso({});
 		setScores(DEFAULT_BIGFIVE);
 		setProcessingSenso(false);
@@ -700,11 +693,9 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 	useEffect(() => {
 		if (!estado.trim()) {
 			setCidades([]);
-			setBairros([]);
 			setCidade("");
 			setCidadeId(null);
 			setBairro("");
-			setBairroId("");
 			return;
 		}
 
@@ -715,8 +706,6 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 			setCidade("");
 			setCidadeId(null);
 			setBairro("");
-			setBairroId("");
-			setBairros([]);
 
 			try {
 				const result = await carregarCidadesPorUf(estado);
@@ -745,48 +734,6 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 			canceled = true;
 		};
 	}, [estado]);
-
-	useEffect(() => {
-		if (!cidadeId) {
-			setBairros([]);
-			setBairro("");
-			setBairroId("");
-			return;
-		}
-
-		let canceled = false;
-
-		const loadBairros = async () => {
-			setLoadingBairros(true);
-			setBairro("");
-			setBairroId("");
-			try {
-				const result = await carregarBairrosPorMunicipio(cidadeId);
-				if (!result.ok || !result.data) {
-					throw new Error(result.message || "Falha ao carregar bairros.");
-				}
-
-				if (!canceled) {
-					setBairros(result.data);
-				}
-			} catch (err) {
-				if (!canceled) {
-					setBairros([]);
-					setError(err instanceof Error ? err.message : "Falha ao carregar bairros.");
-				}
-			} finally {
-				if (!canceled) {
-					setLoadingBairros(false);
-				}
-			}
-		};
-
-		void loadBairros();
-
-		return () => {
-			canceled = true;
-		};
-	}, [cidadeId]);
 
 	useEffect(() => {
 		if (step !== "bigfive" || bigFiveQuestionario || loadingBigFiveQuestionario) {
@@ -1182,9 +1129,7 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 		setCidade("");
 		setCidadeId(null);
 		setBairro("");
-		setBairroId("");
 		setCidades([]);
-		setBairros([]);
 		setRespostasSenso({});
 		setScores(DEFAULT_BIGFIVE);
 		setProcessingSenso(false);
@@ -1340,29 +1285,13 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 									disabled={loadingCidades || !estado || submitting}
 									placeholder={loadingCidades ? "Carregando cidades..." : "Selecione a cidade"}
 								/>
-								<FieldSelect
+								<FieldInput
 									label="Bairro"
-									value={bairroId}
-									onChange={(value) => {
-										const selected = bairros.find((item) => item.id === value);
-										setBairroId(value);
-										setBairro(selected?.nome ?? "");
-									}}
-									options={bairros.map((item) => ({ value: item.id, label: item.nome }))}
-									disabled={loadingBairros || !cidadeId || submitting}
-									placeholder={loadingBairros ? "Carregando bairros..." : "Selecione o bairro"}
+									value={bairro}
+									onChange={(value) => setBairro(value)}
+									placeholder="Digite o bairro"
+									disabled={submitting}
 								/>
-								{!loadingBairros && cidadeId && bairros.length === 0 ? (
-									<FieldInput
-										label="Bairro manual"
-										value={bairro}
-										onChange={(value) => {
-											setBairroId("");
-											setBairro(value);
-										}}
-										placeholder="Digite o bairro"
-									/>
-								) : null}
 							</div>
 
 							<div className="mt-4 space-y-4">

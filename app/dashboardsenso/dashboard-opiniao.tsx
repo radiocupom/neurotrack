@@ -18,6 +18,12 @@ import { useOpiniaoDashboard } from "@/app/dashboardsenso/use-opiniao-dashboard"
 import { useDashboardFilters } from "@/app/dashboardsenso/use-dashboard-filters";
 import { SensoHeatMap, type HeatPoint } from "@/app/dashboardsenso/senso-heatmap";
 import type { DashboardAnaliseIa } from "@/app/dashboardsenso/dashboard-types";
+import {
+  carregarEstadosBrasileiros,
+  carregarCidadesPorUf,
+  type EstadoOption,
+  type CidadeOption,
+} from "@/service/localidades-publicas.service";
 
 export type DashboardOpiniaoProps = {
   loggedUser: AuthUser;
@@ -49,9 +55,32 @@ export function DashboardOpiniao({ loggedUser }: DashboardOpiniaoProps) {
   const { opiniaoFilters, patchFilters, clearFilters } = useDashboardFilters();
   const opiniao = useOpiniaoDashboard(opiniaoFilters);
 
+  // ── localidades (IBGE) ───────────────────────────────────────────────────
+  const [estados, setEstados] = useState<EstadoOption[]>([]);
+  const [cidades, setCidades] = useState<CidadeOption[]>([]);
+  const [loadingCidades, setLoadingCidades] = useState(false);
+
+  useEffect(() => {
+    void carregarEstadosBrasileiros().then((result) => {
+      if (result.ok && result.data) setEstados(result.data);
+    });
+  }, []);
+
+  useEffect(() => {
+    const estadoAtual = String(opiniaoFilters.estado ?? "");
+    if (!estadoAtual) { setCidades([]); return; }
+    setLoadingCidades(true);
+    void carregarCidadesPorUf(estadoAtual).then((result) => {
+      setCidades(result.ok && result.data ? result.data : []);
+      setLoadingCidades(false);
+    });
+  }, [opiniaoFilters.estado]);
+
   const { isConnected } = useDashboardRealtime({
-    onDashboardUpdate: () => {
-      void opiniao.refetch();
+    onDashboardUpdate: (module) => {
+      if (!module || module === "opiniao") {
+        void opiniao.refetch();
+      }
     },
     onBigFiveRespostaRegistrada: () => {},
     onOpiniaoRespostaRegistrada: () => {
@@ -224,22 +253,31 @@ export function DashboardOpiniao({ loggedUser }: DashboardOpiniaoProps) {
 
               <label className="block text-sm text-slate-300">
                 <span className="mb-1 block">Estado</span>
-                <input
+                <select
                   value={String(opiniaoFilters.estado ?? "")}
-                  onChange={(event) => patchFilters("opiniao", { estado: event.target.value, offset: 0 })}
+                  onChange={(event) => patchFilters("opiniao", { estado: event.target.value, cidade: "", offset: 0 })}
                   className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                  placeholder="SP"
-                />
+                >
+                  <option value="">Todos</option>
+                  {estados.map((e) => (
+                    <option key={e.sigla} value={e.sigla}>{e.sigla} — {e.nome}</option>
+                  ))}
+                </select>
               </label>
 
               <label className="block text-sm text-slate-300">
                 <span className="mb-1 block">Cidade</span>
-                <input
+                <select
                   value={String(opiniaoFilters.cidade ?? "")}
                   onChange={(event) => patchFilters("opiniao", { cidade: event.target.value, offset: 0 })}
                   className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                  placeholder="Sao Paulo"
-                />
+                  disabled={!opiniaoFilters.estado || loadingCidades}
+                >
+                  <option value="">{loadingCidades ? "Carregando..." : "Todas"}</option>
+                  {cidades.map((c) => (
+                    <option key={c.id} value={c.nome}>{c.nome}</option>
+                  ))}
+                </select>
               </label>
 
               <label className="block text-sm text-slate-300">

@@ -8,11 +8,15 @@ import {
   obterAnaliseBigFiveDashboardFromExternalApi,
   obterAnaliseOpiniaoDashboardFromExternalApi,
   obterAnaliseSensoDashboardFromExternalApi,
+  obterAuditoriaEntrevistadoresDashboardFromExternalApi,
   obterParticipantesOpiniaoDashboardFromExternalApi,
   obterParticipantesSensoDashboardFromExternalApi,
+  obterParticipantesVotoDashboardFromExternalApi,
+  obterPesquisasEntrevistadorDashboardFromExternalApi,
   obterResumoBigFiveDashboardFromExternalApi,
   obterResumoOpiniaoDashboardFromExternalApi,
   obterResumoSensoDashboardFromExternalApi,
+  obterResumoVotoDashboardFromExternalApi,
 } from "@/service/dashboard.service";
 import type { DashboardFilterValue, DashboardFilters } from "@/service/dashboard-filters";
 
@@ -222,5 +226,78 @@ export async function obterRelatorioOpiniaoDashboardAction(
     return { ok: true, status: 200, data, message: "ok" };
   } catch (error) {
     return mapError(error, "Falha ao carregar relatorio IA do dashboard de opiniao.");
+  }
+}
+
+/**
+ * Resumo da pesquisa de intenção de voto.
+ * Fonte: GET /dashboard/resultado/intencao/:pesquisaId
+ * Quando filtros são enviados, o backend recalcula os totais do resumo.
+ */
+export async function obterResumoVotoDashboardAction(
+  pesquisaId: string,
+  filtros?: DashboardFilters,
+): Promise<ApiResult<unknown>> {
+  const auth = await requireToken();
+  if (!auth.ok) return { ok: false, status: auth.status, data: null, message: auth.message };
+
+  try {
+    const data = await obterResumoVotoDashboardFromExternalApi(auth.token, pesquisaId, toDashboardQuery(filtros));
+    return { ok: true, status: 200, data, message: "ok" };
+  } catch (error) {
+    return mapError(error, "Falha ao carregar resumo do dashboard de voto.");
+  }
+}
+
+/**
+ * Lista detalhada de participantes/votos com filtros geográficos e paginação.
+ * Fonte: GET /dashboard/resultado/intencao/:pesquisaId/participantes
+ * Retorna totalFiltrado — não misturar com totalRespostas do consolidado.
+ */
+export async function obterParticipantesVotoDashboardAction(
+  pesquisaId: string,
+  filtros?: DashboardFilters,
+): Promise<ApiResult<unknown>> {
+  const auth = await requireToken();
+  if (!auth.ok) return { ok: false, status: auth.status, data: null, message: auth.message };
+
+  try {
+    const data = await obterParticipantesVotoDashboardFromExternalApi(auth.token, pesquisaId, toDashboardQuery(filtros));
+    return { ok: true, status: 200, data, message: "ok" };
+  } catch (error) {
+    return mapError(error, "Falha ao carregar participantes do dashboard de voto.");
+  }
+}
+
+export async function obterAuditoriaEntrevistadoresDashboardAction(
+  filtros?: DashboardFilters,
+): Promise<ApiResult<unknown>> {
+  const auth = await requireToken();
+  if (!auth.ok) return { ok: false, status: auth.status, data: null, message: auth.message };
+
+  try {
+    const data = await obterAuditoriaEntrevistadoresDashboardFromExternalApi(auth.token, toDashboardQuery(filtros));
+    return { ok: true, status: 200, data, message: "ok" };
+  } catch (error) {
+    return mapError(error, "Falha ao carregar auditoria de entrevistadores.");
+  }
+}
+
+export async function obterPesquisasEntrevistadorDashboardAction(
+  entrevistadorId: string,
+  filtros?: DashboardFilters,
+): Promise<ApiResult<unknown>> {
+  const auth = await requireToken();
+  if (!auth.ok) return { ok: false, status: auth.status, data: null, message: auth.message };
+
+  try {
+    const data = await obterPesquisasEntrevistadorDashboardFromExternalApi(
+      auth.token,
+      entrevistadorId,
+      toDashboardQuery(filtros),
+    );
+    return { ok: true, status: 200, data, message: "ok" };
+  } catch (error) {
+    return mapError(error, "Falha ao carregar detalhes do entrevistador.");
   }
 }
