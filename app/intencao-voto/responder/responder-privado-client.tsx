@@ -72,7 +72,7 @@ export function ResponderIntencaoVotoPrivadoClient() {
       canal,
     });
 
-    if (finalState === "success" || finalState === "queued") {
+    if (finalState === "success" || finalState === "queued" || finalState === "already-voted") {
       setPasso("resultado");
     }
   }
@@ -208,6 +208,22 @@ export function ResponderIntencaoVotoPrivadoClient() {
                 submensagem="O voto do participante foi salvo com sucesso."
                 onNovaResposta={resetFlow}
               />
+            ) : null}
+            {contexto.state === "error" ? (
+              <Card>
+                <div className="flex flex-col items-center gap-4 py-6 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500/20">
+                    <svg className="h-8 w-8 text-red-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
+                    </svg>
+                  </div>
+                  <h2 className="text-xl font-bold text-red-300">Voto não permitido</h2>
+                  <p className="text-sm text-slate-300">{contexto.error}</p>
+                  <Button onClick={resetFlow} fullWidth className="mt-2">
+                    Nova pesquisa
+                  </Button>
+                </div>
+              </Card>
             ) : null}
           </>
         ) : null}

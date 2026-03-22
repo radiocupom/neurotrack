@@ -30,6 +30,8 @@ type JsonRecord = Record<string, unknown>;
 
 type PesquisaFilters = {
   pesquisaId?: string;
+  participanteId?: string;
+  telefone?: string;
   candidatoId?: string;
   idadeMin?: number;
   idadeMax?: number;
@@ -646,7 +648,14 @@ function normalizeVotoPayloadPublico(payload: PayloadRegistrarVotoPublico) {
 
 function buildVoteErrorMessage(status: number, message: string | undefined, isPublic = false) {
   const lower = message?.toLowerCase() || "";
-  if (status === 400 && lower.includes("já votou")) {
+  if (
+    status === 400 &&
+    (lower.includes("já votou") ||
+      lower.includes("ja votou") ||
+      lower.includes("já respondeu") ||
+      lower.includes("ja respondeu") ||
+      lower.includes("uma vez por pesquisa"))
+  ) {
     return "Este participante já votou nesta pesquisa. Um participante só pode votar uma vez por pesquisa.";
   }
   if (status === 403) {
@@ -799,6 +808,48 @@ export async function filtrarVotosIntencaoDeVoto(
   }
 }
 
+export async function verificarParticipacaoIntencaoDeVoto(
+  token: string,
+  payload: { pesquisaId: string; participanteId: string; telefone?: string },
+): Promise<ApiResponse<{ jaVotou: boolean }>> {
+  try {
+    const votos = await listarVotosIntencaoDeVoto(token, {
+      pesquisaId: payload.pesquisaId,
+      participanteId: payload.participanteId,
+      telefone: payload.telefone,
+      limit: 5,
+    });
+
+    if (!votos.ok) {
+      return {
+        ok: false,
+        status: votos.status,
+        data: null,
+        message: votos.message || "Falha ao verificar participação.",
+      };
+    }
+
+    const telefoneNormalizado = payload.telefone?.replace(/\D/g, "") || "";
+    const jaVotou = Boolean(
+      votos.data?.some((item) => {
+        const participanteMatch = item.participante?.id === payload.participanteId;
+        const contatoVoto = (item.participante?.contatoOpcional || "").replace(/\D/g, "");
+        const telefoneMatch = Boolean(telefoneNormalizado) && Boolean(contatoVoto) && telefoneNormalizado === contatoVoto;
+        return participanteMatch || telefoneMatch;
+      }),
+    );
+
+    return {
+      ok: true,
+      status: 200,
+      data: { jaVotou },
+      message: jaVotou ? "Participante já votou nesta pesquisa." : "Participante apto para responder.",
+    };
+  } catch (error) {
+    return mapApiError(error, "Falha ao verificar participação.");
+  }
+}
+
 export async function buscarResultadosIntencaoDeVoto(
   token: string,
   pesquisaId: string,
@@ -851,11 +902,12 @@ export async function buscarResultadosIntencaoDeVoto(
 export async function buscarParticipanteIntencaoDeVotoPorContato(
   token: string,
   contato: string,
+  pesquisaId?: string,
 ): Promise<ApiResponse<unknown>> {
   try {
-    const data = await privateRequest<unknown>("/participantes/buscar-por-contato", token, {
+    const data = await privateRequest<unknown>(`${MODULE_PATH}/buscar-por-contato`, token, {
       method: "GET",
-      query: { contato },
+      query: { contato, pesquisaId: pesquisaId?.trim() || undefined },
     });
 
     return {
@@ -865,7 +917,49 @@ export async function buscarParticipanteIntencaoDeVotoPorContato(
       message: "Participante encontrado.",
     };
   } catch (error) {
-    return mapApiError(error, "Falha ao consultar participante por contato.");
+    const message = readExternalApiErrorMessage(error);
+    const status =
+      error && typeof error === "object" && "status" in error
+        ? ((error as { status: unknown }).status as number)
+        : 500;
+
+    if (status === 404) {
+      return { ok: false, status: 404, data: null, message: "Participante não encontrado." };
+    }
+
+    if (status === 400 && message) {
+      const lower = message.toLowerCase();
+      if (
+        lower.includes("já votou") ||
+        lower.includes("ja votou") ||
+        lower.includes("já respondeu") ||
+        lower.includes("ja respondeu") ||
+        lower.includes("duplicad")
+      ) {
+        return {
+          ok: false,
+          status: 409,
+          data: null,
+          message: "Este participante já respondeu esta pesquisa.",
+        };
+      }
+    }
+
+    if (status === 403) {
+      return {
+        ok: false,
+        status: 409,
+        data: null,
+        message: "Este participante já votou nesta pesquisa.",
+      };
+    }
+
+    return {
+      ok: false,
+      status,
+      data: null,
+      message: message || "Falha ao consultar participante por contato.",
+    };
   }
 }
 

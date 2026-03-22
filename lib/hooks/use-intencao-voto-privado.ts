@@ -31,6 +31,19 @@ type VotoPayload = {
   canal: CanalVoto;
 };
 
+function maskContato(value?: string | null) {
+  const normalized = (value || "").trim();
+  if (!normalized) {
+    return "";
+  }
+
+  if (normalized.length <= 4) {
+    return "****";
+  }
+
+  return `${normalized.slice(0, 2)}***${normalized.slice(-2)}`;
+}
+
 export function useIntencaoVotoPrivado({ pesquisaId }: { pesquisaId: string }) {
   const [pesquisa, setPesquisa] = useState<PesquisaIntencaoVotoDetalhe | null>(null);
   const [pesquisaLoading, setPesquisaLoading] = useState(true);
@@ -93,8 +106,23 @@ export function useIntencaoVotoPrivado({ pesquisaId }: { pesquisaId: string }) {
     setParticipanteLoading(true);
     setParticipanteError(null);
 
+    console.info("[intencao-voto][identificacao] iniciando busca/criacao", {
+      pesquisaId,
+      contato: maskContato(contato),
+      hasNome: Boolean(nome?.trim()),
+      hasEmail: Boolean(email?.trim()),
+    });
+
     try {
-      const result = await buscarOuCriarParticipanteIntencaoVotoPrivadoAction({ contato, nome, email });
+      const result = await buscarOuCriarParticipanteIntencaoVotoPrivadoAction({ contato, pesquisaId, nome, email });
+      console.info("[intencao-voto][identificacao] resposta da action", {
+        pesquisaId,
+        ok: result.ok,
+        status: result.status,
+        message: result.message,
+        hasData: Boolean(result.data),
+      });
+
       if (!result.ok || !result.data) {
         setParticipanteError(result.message || "Falha ao identificar participante.");
         return;
@@ -107,12 +135,18 @@ export function useIntencaoVotoPrivado({ pesquisaId }: { pesquisaId: string }) {
       }
 
       setParticipante(normalized);
+      console.info("[intencao-voto][identificacao] participante pronto para fluxo", {
+        pesquisaId,
+        participanteId: normalized.id,
+        contato: maskContato(normalized.contato),
+      });
     } catch {
+      console.error("[intencao-voto][identificacao] erro inesperado");
       setParticipanteError("Erro inesperado ao identificar participante.");
     } finally {
       setParticipanteLoading(false);
     }
-  }, []);
+  }, [pesquisaId]);
 
   const votar = useCallback(
     async (localizacao: LocalizacaoPayload, voto: VotoPayload) => {
@@ -144,6 +178,17 @@ export function useIntencaoVotoPrivado({ pesquisaId }: { pesquisaId: string }) {
       setState("submitting");
       setError(null);
 
+      console.info("[intencao-voto][voto] enviando voto", {
+        pesquisaId: pesquisa.id,
+        participanteId: participante.id,
+        candidatoId: voto.candidatoId,
+        canal: voto.canal,
+        idade: voto.idade,
+        estado: localizacao.estado,
+        cidade: localizacao.cidade,
+        bairro: localizacao.bairro,
+      });
+
       try {
         const result = await registrarVotoIntencaoVotoPrivadoAction({
           participanteId: participante.id,
@@ -157,22 +202,60 @@ export function useIntencaoVotoPrivado({ pesquisaId }: { pesquisaId: string }) {
           bairro: localizacao.bairro.trim(),
         });
 
+        console.info("[intencao-voto][voto] resposta da action", {
+          pesquisaId: pesquisa.id,
+          participanteId: participante.id,
+          ok: result.ok,
+          status: result.status,
+          message: result.message,
+        });
+
         if (!result.ok) {
+          const msg = (result.message || "").toLowerCase();
+          const isAlreadyVoted =
+            result.status === 409 ||
+            msg.includes("já votou") ||
+            msg.includes("ja votou") ||
+            msg.includes("já respondeu") ||
+            msg.includes("ja respondeu") ||
+            msg.includes("uma vez por pesquisa");
+
           setState("error");
-          setError(result.message || "Falha ao registrar voto.");
-          return "error" as const;
+          setError(
+            isAlreadyVoted
+              ? "Este participante já votou nesta pesquisa. Não é possível votar novamente."
+              : result.message || "Falha ao registrar voto.",
+          );
+          if (isAlreadyVoted) {
+            console.warn("[intencao-voto][voto] bloqueado por voto duplicado", {
+              pesquisaId: pesquisa.id,
+              participanteId: participante.id,
+              status: result.status,
+              message: result.message,
+            });
+          }
+          return isAlreadyVoted ? ("already-voted" as const) : ("error" as const);
         }
 
         if (result.status === 202) {
           setState("queued");
+          console.info("[intencao-voto][voto] voto enfileirado", {
+            pesquisaId: pesquisa.id,
+            participanteId: participante.id,
+          });
           return "queued" as const;
         }
 
         setState("success");
+        console.info("[intencao-voto][voto] voto registrado com sucesso", {
+          pesquisaId: pesquisa.id,
+          participanteId: participante.id,
+        });
         return "success" as const;
       } catch {
         setState("error");
         setError("Erro inesperado ao registrar voto.");
+        console.error("[intencao-voto][voto] erro inesperado durante envio");
         return "error" as const;
       }
     },

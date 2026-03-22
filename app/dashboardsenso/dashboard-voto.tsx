@@ -491,7 +491,7 @@ export function DashboardVoto({ loggedUser }: DashboardVotoProps) {
                         <Tooltip
                           cursor={{ fill: "rgba(56,189,248,0.12)" }}
                           contentStyle={{ backgroundColor: "#0f172a", borderColor: "rgba(148,163,184,0.35)", borderRadius: 10, color: "#e2e8f0" }}
-                          formatter={(v: number) => [`${v} voto(s)`, "Votos"]}
+                          formatter={(v) => [`${Number(v ?? 0)} voto(s)`, "Votos"]}
                         />
                         <Bar dataKey="votos" fill="#22d3ee" radius={[8, 8, 0, 0]} />
                       </BarChart>

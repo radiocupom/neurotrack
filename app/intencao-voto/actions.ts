@@ -52,8 +52,50 @@ function normalizeParticipantResult(data: unknown): ParticipanteIntencaoVoto | n
   };
 }
 
+type ParticipantePrecheck = {
+  participante: ParticipanteIntencaoVoto | null;
+  jaRespondeu: boolean;
+  podeResponder: boolean;
+};
+
+function readParticipantePrecheck(data: unknown): ParticipantePrecheck {
+  const payload = readObject(data);
+  const status = readObject(payload?.status);
+
+  const jaRespondeu =
+    (typeof payload?.jaRespondeu === "boolean" ? payload.jaRespondeu : null) ??
+    (typeof status?.jaRespondeu === "boolean" ? status.jaRespondeu : false);
+
+  const podeResponder =
+    (typeof payload?.podeResponder === "boolean" ? payload.podeResponder : null) ??
+    (typeof status?.podeResponder === "boolean" ? status.podeResponder : true);
+
+  const participante = normalizeParticipantResult(data);
+
+  return { participante, jaRespondeu, podeResponder };
+}
+
+function summarizePayloadForDebug(data: unknown) {
+  if (Array.isArray(data)) {
+    const first = readObject(data[0]);
+    return {
+      kind: "array",
+      length: data.length,
+      firstKeys: first ? Object.keys(first) : [],
+    };
+  }
+
+  const payload = readObject(data);
+  return {
+    kind: typeof data,
+    keys: payload ? Object.keys(payload) : [],
+    statusKeys: payload && readObject(payload.status) ? Object.keys(readObject(payload.status) as Record<string, unknown>) : [],
+  };
+}
+
 type ParticipantInput = {
   contato: string;
+  pesquisaId?: string;
   nome?: string;
   email?: string;
 };
@@ -62,6 +104,7 @@ export async function buscarOuCriarParticipanteIntencaoVotoPrivadoAction(
   input: ParticipantInput,
 ): Promise<ApiResponse<ParticipanteIntencaoVoto>> {
   const contato = input.contato?.trim() ?? "";
+  const pesquisaId = input.pesquisaId?.trim() || undefined;
   const nome = input.nome?.trim();
   const email = input.email?.trim();
 
@@ -74,11 +117,45 @@ export async function buscarOuCriarParticipanteIntencaoVotoPrivadoAction(
     return { ok: false, status: 401, data: null, message: "Sessao invalida. Faca login novamente." };
   }
 
-  const busca = await buscarParticipanteIntencaoDeVotoPorContato(session.token, contato);
-  if (busca.ok) {
-    const participante = normalizeParticipantResult(busca.data);
-    if (participante) {
-      return { ok: true, status: 200, data: participante, message: "Participante encontrado." };
+  const busca = await buscarParticipanteIntencaoDeVotoPorContato(session.token, contato, pesquisaId);
+  console.info("[intencao-voto][action][participante] retorno buscar-por-contato", {
+    pesquisaId,
+    contatoInformado: Boolean(contato),
+    ok: busca.ok,
+    status: busca.status,
+    message: busca.message,
+    payloadShape: summarizePayloadForDebug(busca.data),
+  });
+
+  if (busca.status === 409) {
+    return {
+      ok: false,
+      status: 409,
+      data: null,
+      message: busca.message || "Este participante já respondeu esta pesquisa.",
+    };
+  }
+
+  if (busca.ok && busca.data) {
+    const precheck = readParticipantePrecheck(busca.data);
+    console.info("[intencao-voto][action][participante] resultado precheck", {
+      pesquisaId,
+      jaRespondeu: precheck.jaRespondeu,
+      podeResponder: precheck.podeResponder,
+      hasParticipante: Boolean(precheck.participante),
+    });
+
+    if (precheck.jaRespondeu || !precheck.podeResponder) {
+      return {
+        ok: false,
+        status: 409,
+        data: null,
+        message: "Este participante já respondeu esta pesquisa.",
+      };
+    }
+
+    if (precheck.participante) {
+      return { ok: true, status: 200, data: precheck.participante, message: "Participante encontrado." };
     }
   }
 

@@ -101,7 +101,18 @@ async function fetchUsuarios() {
 }
 
 async function createUsuario(payload: UserFormInput) {
-  const result = await criarUsuarioAction(payload);
+  const senha = payload.senha?.trim();
+  if (!senha) {
+    throw new Error("Senha e obrigatoria para cadastrar usuario.");
+  }
+
+  const result = await criarUsuarioAction({
+    nome: payload.nome,
+    email: payload.email,
+    papel: payload.papel,
+    ativo: payload.ativo,
+    senha,
+  });
 
   if (!result.ok) {
     throw new Error(result.message || "Nao foi possivel cadastrar usuario.");

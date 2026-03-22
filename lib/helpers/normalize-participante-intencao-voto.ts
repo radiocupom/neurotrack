@@ -25,6 +25,7 @@ export function normalizarParticipanteIntencaoVoto(data: unknown): ParticipanteI
     email: typeof raw.email === "string" ? raw.email.trim() || null : null,
     contato:
       (typeof raw.telefone === "string" ? raw.telefone.trim() : null) ||
+      (typeof raw.contato === "string" ? raw.contato.trim() : null) ||
       (typeof raw.contatoOpcional === "string" ? raw.contatoOpcional.trim() : null) ||
       null,
   };

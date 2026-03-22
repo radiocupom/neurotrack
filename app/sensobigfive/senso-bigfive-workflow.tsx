@@ -1385,11 +1385,11 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 	);
 }
 
-function FieldInput({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string }) {
+function FieldInput({ label, value, onChange, placeholder, disabled }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; disabled?: boolean }) {
 	return (
 		<label className="block text-sm text-slate-300">
 			<span className="mb-1 block">{label}</span>
-			<input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100 outline-none ring-cyan-400/35 transition focus:ring-2" />
+			<input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} disabled={disabled} className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100 outline-none ring-cyan-400/35 transition focus:ring-2 disabled:opacity-60" />
 		</label>
 	);
 }
