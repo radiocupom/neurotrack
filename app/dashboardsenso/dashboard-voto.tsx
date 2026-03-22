@@ -26,6 +26,7 @@ import type {
   DashboardVotoParticipantes,
   DashboardVotoResumoGeral,
 } from "@/app/dashboardsenso/dashboard-types";
+import type { DashboardFilters } from "@/service/dashboard-filters";
 import type { StatusFilaIntencaoVoto } from "@/types/intencao-voto";
 import {
   carregarCidadesPorUf,
@@ -50,15 +51,149 @@ function formatData(value?: string | null) {
   return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString("pt-BR");
 }
 
-function buildResumoFiltros(filtros: DashboardVotoFiltros) {
-  const query: Record<string, string> = {};
+function asObject(payload: unknown) {
+  return payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function readNullableString(value: unknown) {
+  return typeof value === "string" ? value : null;
+}
+
+function readNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function readNullableNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function hasActiveFilters(filtros: DashboardVotoFiltros) {
+  return Boolean(
+    filtros.estado || filtros.cidade || filtros.bairro || filtros.candidatoId || filtros.idadeMin || filtros.idadeMax,
+  );
+}
+
+function buildVotoFiltrosQuery(
+  filtros: DashboardVotoFiltros,
+  options?: { includePagination?: boolean; apenasComCoordenada?: boolean; limit?: number; offset?: number },
+): DashboardFilters {
+  const query: DashboardFilters = {};
   if (filtros.estado) query.estado = filtros.estado;
   if (filtros.cidade) query.cidade = filtros.cidade;
   if (filtros.bairro) query.bairro = filtros.bairro;
   if (filtros.candidatoId) query.candidatoId = filtros.candidatoId;
-  if (filtros.idadeMin) query.idadeMin = String(filtros.idadeMin);
-  if (filtros.idadeMax) query.idadeMax = String(filtros.idadeMax);
+  if (filtros.idadeMin) query.idadeMin = filtros.idadeMin;
+  if (filtros.idadeMax) query.idadeMax = filtros.idadeMax;
+  if (options?.includePagination !== false) {
+    query.limit = options?.limit ?? filtros.limit;
+    query.offset = options?.offset ?? filtros.offset;
+  }
+  if (options?.apenasComCoordenada) {
+    query.apenasComCoordenada = true;
+  }
   return query;
+}
+
+function normalizeResumo(payload: unknown, pesquisaId: string): DashboardVotoResumoGeral {
+  const raw = asObject(payload);
+  const resultadosRaw = Array.isArray(raw.resultados)
+    ? raw.resultados
+    : Array.isArray(raw.resultado)
+      ? raw.resultado
+      : [];
+
+  return {
+    id: readString(raw.id) || pesquisaId,
+    titulo: readString(raw.titulo) || undefined,
+    totalRespostas: readNumber(raw.totalRespostas ?? raw.totalVotosFiltrados ?? raw.totalRespostasFiltradas ?? raw.totalVotos ?? raw.total),
+    resultados: resultadosRaw.map((item, index) => {
+      const resultado = asObject(item);
+      const candidatosRaw = Array.isArray(resultado.candidatos)
+        ? resultado.candidatos
+        : Array.isArray(resultado.ranking)
+          ? resultado.ranking
+          : [];
+
+      return {
+        cargo: readString(resultado.cargo) || `Cargo ${index + 1}`,
+        candidatos: candidatosRaw.map((candidato, candidatoIndex) => {
+          const row = asObject(candidato);
+          return {
+            id: readString(row.id) || readString(row.candidatoId) || `candidato-${index}-${candidatoIndex}`,
+            nome: readString(row.nome) || `Candidato ${candidatoIndex + 1}`,
+            partido: readNullableString(row.partido),
+            total: readNumber(row.total ?? row.votos),
+            fotoUrl: readNullableString(row.fotoUrl),
+          };
+        }),
+      };
+    }),
+  };
+}
+
+function normalizeParticipantes(payload: unknown, pesquisaId: string): DashboardVotoParticipantes {
+  const raw = asObject(payload);
+  const votosRaw = Array.isArray(raw.votos)
+    ? raw.votos
+    : Array.isArray(raw.participantes)
+      ? raw.participantes
+      : Array.isArray(raw.respostas)
+        ? raw.respostas
+        : [];
+  const paginacaoRaw = asObject(raw.paginacao);
+
+  return {
+    pesquisaId: readString(raw.pesquisaId) || pesquisaId,
+    total: readNumber(raw.total),
+    totalFiltrado: readNumber(raw.totalFiltrado ?? raw.total),
+    filtrosAplicados: raw.filtrosAplicados && typeof raw.filtrosAplicados === "object"
+      ? (raw.filtrosAplicados as DashboardFilters)
+      : undefined,
+    paginacao: {
+      limit: readNumber(paginacaoRaw.limit) || LIMITE_PAGINA,
+      offset: readNumber(paginacaoRaw.offset),
+      temMais: Boolean(paginacaoRaw.temMais),
+    },
+    votos: votosRaw.map((item, index) => {
+      const voto = asObject(item);
+      const coordenada = asObject(voto.coordenada);
+      return {
+        id: readString(voto.id) || `voto-${index}`,
+        criadoEm: readString(voto.criadoEm) || readString(voto.respondidoEm) || undefined,
+        canal: readNullableString(voto.canal),
+        idade: readNullableNumber(voto.idade),
+        telefone: readNullableString(voto.telefone) ?? readNullableString(voto.contato),
+        estado: readNullableString(voto.estado),
+        cidade: readNullableString(voto.cidade),
+        bairro: readNullableString(voto.bairro),
+        latitude: readNullableNumber(voto.latitude),
+        longitude: readNullableNumber(voto.longitude),
+        coordenada: voto.coordenada && typeof voto.coordenada === "object"
+          ? {
+              latitude: readNullableNumber(coordenada.latitude),
+              longitude: readNullableNumber(coordenada.longitude),
+            }
+          : null,
+        candidato: voto.candidato && typeof voto.candidato === "object"
+          ? (voto.candidato as DashboardVotoItem["candidato"])
+          : undefined,
+        pesquisa: voto.pesquisa && typeof voto.pesquisa === "object"
+          ? (voto.pesquisa as DashboardVotoItem["pesquisa"])
+          : undefined,
+        participante: voto.participante && typeof voto.participante === "object"
+          ? (voto.participante as DashboardVotoItem["participante"])
+          : undefined,
+        entrevistador: voto.entrevistador && typeof voto.entrevistador === "object"
+          ? (voto.entrevistador as DashboardVotoItem["entrevistador"])
+          : undefined,
+        ip: readNullableString(voto.ip),
+      };
+    }),
+  };
 }
 
 export type DashboardVotoProps = {
@@ -67,6 +202,7 @@ export type DashboardVotoProps = {
 
 export function DashboardVoto({ loggedUser }: DashboardVotoProps) {
   const { pesquisas, loading: loadingPesquisas, error: errorPesquisas } = usePesquisasIntencaoVoto({ autoload: true });
+  const canSeeQueue = loggedUser.papel === "ADMIN" || loggedUser.papel === "SUPERADMIN";
 
   // ── pesquisa selecionada ─────────────────────────────────────────────────
   const [pesquisaId, setPesquisaId] = useState("");
@@ -77,7 +213,7 @@ export function DashboardVoto({ loggedUser }: DashboardVotoProps) {
   }, []);
   const { isConnected } = useDashboardRealtime({
     onDashboardUpdate: (module) => {
-      if (!module || module === "intencao-voto" || module === "voto" || module === "intencao") {
+      if (!module || module === "intencao-voto" || module === "pesquisa-intencao-voto" || module === "voto" || module === "intencao") {
         triggerRealtimeRefresh();
       }
     },
@@ -89,7 +225,8 @@ export function DashboardVoto({ loggedUser }: DashboardVotoProps) {
   });
 
   // ── resumo da pesquisa (recalculado quando filtros mudam) ────────────────
-  const [resumoGeral, setResumoGeral] = useState<DashboardVotoResumoGeral | null>(null);
+  const [resumoBase, setResumoBase] = useState<DashboardVotoResumoGeral | null>(null);
+  const [resumoFiltrado, setResumoFiltrado] = useState<DashboardVotoResumoGeral | null>(null);
   const [fila, setFila] = useState<StatusFilaIntencaoVoto>(emptyQueue());
   const [loadingResumo, setLoadingResumo] = useState(false);
   const [errorResumo, setErrorResumo] = useState("");
@@ -97,6 +234,7 @@ export function DashboardVoto({ loggedUser }: DashboardVotoProps) {
   // ── lista filtrada de votos ───────────────────────────────────────────────
   const [filtros, setFiltros] = useState<DashboardVotoFiltros>(emptyFiltros());
   const [listaVotos, setListaVotos] = useState<DashboardVotoParticipantes | null>(null);
+  const [votosComCoordenada, setVotosComCoordenada] = useState<DashboardVotoParticipantes | null>(null);
   const [loadingVotos, setLoadingVotos] = useState(false);
   const [errorVotos, setErrorVotos] = useState("");
 
@@ -130,20 +268,40 @@ export function DashboardVoto({ loggedUser }: DashboardVotoProps) {
     async function loadResumo() {
       setLoadingResumo(true);
       setErrorResumo("");
-      const resumoFiltros = buildResumoFiltros(filtros);
-      const [resumoResult, filaResult] = await Promise.all([
-        obterResumoVotoDashboardAction(selectedPesquisaId, resumoFiltros),
-        obterStatusFilaIntencaoVotoAction(),
+
+      const possuiFiltros = hasActiveFilters(filtros);
+      const [resumoBaseResult, resumoFiltradoResult, filaResult] = await Promise.all([
+        obterResumoVotoDashboardAction(selectedPesquisaId),
+        possuiFiltros
+          ? obterResumoVotoDashboardAction(selectedPesquisaId, buildVotoFiltrosQuery(filtros, { includePagination: false }))
+          : Promise.resolve(null),
+        canSeeQueue ? obterStatusFilaIntencaoVotoAction() : Promise.resolve(null),
       ]);
+
       if (!mounted) return;
-      if (!resumoResult.ok || !resumoResult.data) {
-        setResumoGeral(null);
-        setErrorResumo(resumoResult.message || "Falha ao carregar resumo.");
+
+      if (!resumoBaseResult.ok || !resumoBaseResult.data) {
+        setResumoBase(null);
+        setResumoFiltrado(null);
+        setErrorResumo(resumoBaseResult.message || "Falha ao carregar resumo.");
         setLoadingResumo(false);
         return;
       }
-      setResumoGeral(resumoResult.data as DashboardVotoResumoGeral);
-      setFila(filaResult.ok && filaResult.data ? (filaResult.data as StatusFilaIntencaoVoto) : emptyQueue());
+
+      setResumoBase(normalizeResumo(resumoBaseResult.data, selectedPesquisaId));
+
+      if (resumoFiltradoResult && resumoFiltradoResult.ok && resumoFiltradoResult.data) {
+        setResumoFiltrado(normalizeResumo(resumoFiltradoResult.data, selectedPesquisaId));
+      } else {
+        setResumoFiltrado(null);
+      }
+
+      if (canSeeQueue && filaResult && filaResult.ok && filaResult.data) {
+        setFila(filaResult.data as StatusFilaIntencaoVoto);
+      } else {
+        setFila(emptyQueue());
+      }
+
       setLoadingResumo(false);
     }
 
@@ -156,6 +314,7 @@ export function DashboardVoto({ loggedUser }: DashboardVotoProps) {
     filtros.estado,
     filtros.idadeMax,
     filtros.idadeMin,
+    canSeeQueue,
     refreshSeed,
     selectedPesquisaId,
   ]);
@@ -167,26 +326,26 @@ export function DashboardVoto({ loggedUser }: DashboardVotoProps) {
       setLoadingVotos(true);
       setErrorVotos("");
 
-      const params: Record<string, string> = {
-        limit: String(f.limit),
-        offset: String(f.offset),
-      };
-      if (f.estado) params.estado = f.estado;
-      if (f.cidade) params.cidade = f.cidade;
-      if (f.bairro) params.bairro = f.bairro;
-      if (f.candidatoId) params.candidatoId = f.candidatoId;
-      if (f.idadeMin) params.idadeMin = f.idadeMin;
-      if (f.idadeMax) params.idadeMax = f.idadeMax;
-
-      const result = await obterParticipantesVotoDashboardAction(id, params);
+      const [result, coordenadasResult] = await Promise.all([
+        obterParticipantesVotoDashboardAction(id, buildVotoFiltrosQuery(f)),
+        obterParticipantesVotoDashboardAction(
+          id,
+          buildVotoFiltrosQuery(f, { apenasComCoordenada: true, limit: 1000, offset: 0 }),
+        ),
+      ]);
 
       if (!result.ok || !result.data) {
+        setListaVotos(null);
+        setVotosComCoordenada(null);
         setErrorVotos(result.message || "Falha ao carregar votos.");
         setLoadingVotos(false);
         return;
       }
 
-      setListaVotos(result.data as DashboardVotoParticipantes);
+      setListaVotos(normalizeParticipantes(result.data, id));
+      setVotosComCoordenada(
+        coordenadasResult.ok && coordenadasResult.data ? normalizeParticipantes(coordenadasResult.data, id) : null,
+      );
       setLoadingVotos(false);
     },
     [],
@@ -200,24 +359,28 @@ export function DashboardVoto({ loggedUser }: DashboardVotoProps) {
 
   // reset ao trocar pesquisa
   useEffect(() => {
-    setResumoGeral(null);
+    setResumoBase(null);
+    setResumoFiltrado(null);
     setListaVotos(null);
+    setVotosComCoordenada(null);
     setFiltros(emptyFiltros());
   }, [selectedPesquisaId]);
 
   // ── listas derivadas ─────────────────────────────────────────────────────
+  const possuiFiltrosAtivos = hasActiveFilters(filtros);
+  const resumoAtual = possuiFiltrosAtivos ? (resumoFiltrado ?? resumoBase) : resumoBase;
   const candidatosDisponiveis = useMemo(
-    () => (resumoGeral?.resultados ?? []).flatMap((r) => r.candidatos ?? []),
-    [resumoGeral],
+    () => (resumoBase?.resultados ?? []).flatMap((r) => r.candidatos ?? []),
+    [resumoBase],
   );
 
   const heatPoints = useMemo<HeatPoint[]>(() => {
-    return (listaVotos?.votos ?? []).flatMap((v) => {
+    return (votosComCoordenada?.votos ?? []).flatMap((v) => {
       const lat = typeof v.latitude === "number" ? v.latitude : (v.coordenada?.latitude ?? null);
       const lng = typeof v.longitude === "number" ? v.longitude : (v.coordenada?.longitude ?? null);
       return lat != null && lng != null ? [{ lat, lng, intensity: 0.65 }] : [];
     });
-  }, [listaVotos]);
+  }, [votosComCoordenada]);
 
   // ── helpers ──────────────────────────────────────────────────────────────
   function patchFiltros(patch: Partial<DashboardVotoFiltros>) {
@@ -235,56 +398,9 @@ export function DashboardVoto({ loggedUser }: DashboardVotoProps) {
 
   const votos = listaVotos?.votos ?? [];
   const totalFiltrado = listaVotos?.totalFiltrado ?? 0;
-  const possuiFiltrosAtivos = Boolean(
-    filtros.estado || filtros.cidade || filtros.bairro || filtros.candidatoId || filtros.idadeMin || filtros.idadeMax,
-  );
-  const rankingResultados = useMemo(() => {
-    if (!possuiFiltrosAtivos) {
-      return resumoGeral?.resultados ?? [];
-    }
-
-    const cargosMap = new Map<
-      string,
-      {
-        cargo: string;
-        candidatos: Map<string, { id: string; nome: string; partido?: string | null; total: number }>;
-      }
-    >();
-
-    votos.forEach((voto) => {
-      const cargo = voto.pesquisa?.cargo ?? "Sem cargo";
-      const candidatoId = voto.candidato?.id ?? voto.candidato?.nome ?? voto.id;
-      const candidatoNome = voto.candidato?.nome ?? "Sem candidato";
-      const candidatoPartido = voto.candidato?.partido ?? null;
-
-      if (!cargosMap.has(cargo)) {
-        cargosMap.set(cargo, { cargo, candidatos: new Map() });
-      }
-
-      const cargoAtual = cargosMap.get(cargo);
-      if (!cargoAtual) return;
-
-      const candidatoAtual = cargoAtual.candidatos.get(candidatoId);
-      if (candidatoAtual) {
-        candidatoAtual.total += 1;
-        return;
-      }
-
-      cargoAtual.candidatos.set(candidatoId, {
-        id: candidatoId,
-        nome: candidatoNome,
-        partido: candidatoPartido,
-        total: 1,
-      });
-    });
-
-    return Array.from(cargosMap.values()).map((item) => ({
-      cargo: item.cargo,
-      candidatos: Array.from(item.candidatos.values()),
-    }));
-  }, [possuiFiltrosAtivos, resumoGeral, votos]);
+  const rankingResultados = resumoAtual?.resultados ?? [];
   const totalCandidatosCard = rankingResultados.reduce((acc, resultado) => acc + resultado.candidatos.length, 0);
-  const totalVotosCard = possuiFiltrosAtivos ? totalFiltrado : (resumoGeral?.totalRespostas ?? 0);
+  const totalVotosCard = resumoAtual?.totalRespostas ?? totalFiltrado;
   const totalVotosLabel = possuiFiltrosAtivos ? "Total de votos filtrados" : "Total geral da pesquisa";
 
   return (
@@ -459,12 +575,21 @@ export function DashboardVoto({ loggedUser }: DashboardVotoProps) {
             {loadingResumo ? <Loading message="Carregando resumo..." /> : null}
             {errorResumo ? <Alert type="error">{errorResumo}</Alert> : null}
 
-            {resumoGeral ? (
+            {resumoAtual ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <MetricCardVoto label={totalVotosLabel} value={String(totalVotosCard)} />
                 <MetricCardVoto label="Candidatos" value={String(totalCandidatosCard)} />
-                <MetricCardVoto label="Fila pendente" value={String(fila.pendentes)} />
-                <MetricCardVoto label="Fila processada" value={String(fila.processadas)} />
+                {canSeeQueue ? (
+                  <>
+                    <MetricCardVoto label="Fila pendente" value={String(fila.pendentes)} />
+                    <MetricCardVoto label="Fila processada" value={String(fila.processadas)} />
+                  </>
+                ) : (
+                  <>
+                    <MetricCardVoto label="Tempo real" value={isConnected ? "Online" : "Offline"} />
+                    <MetricCardVoto label="Votos na página" value={String(votos.length)} />
+                  </>
+                )}
               </div>
             ) : null}
 
@@ -519,8 +644,8 @@ export function DashboardVoto({ loggedUser }: DashboardVotoProps) {
                 {listaVotos ? (
                   <span className="text-xs text-slate-400">
                     Total filtrado: <strong className="text-white">{totalFiltrado}</strong>
-                    {resumoGeral ? (
-                      <span className="ml-2 text-slate-500">(geral: {resumoGeral.totalRespostas})</span>
+                    {resumoBase ? (
+                      <span className="ml-2 text-slate-500">(geral: {resumoBase.totalRespostas})</span>
                     ) : null}
                   </span>
                 ) : null}

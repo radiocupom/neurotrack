@@ -95,6 +95,27 @@ export type RealtimeState = {
   counts: RealtimeCounts;
 };
 
+const INTENCAO_EVENT_NAMES = [
+  "dashboard:intencao:voto-registrado",
+  "dashboard:intencao:resposta-registrada",
+  "dashboard:intencao-voto:resposta-registrada",
+  "dashboard:voto:resposta-registrada",
+] as const;
+
+function normalizeModuleName(value?: string) {
+  return typeof value === "string" ? value.trim().toLowerCase().replace(/[\s_]+/g, "-") : "";
+}
+
+function isIntencaoModule(module?: string) {
+  const normalized = normalizeModuleName(module);
+  return (
+    normalized === "intencao-voto" ||
+    normalized === "intencao" ||
+    normalized === "voto" ||
+    normalized.includes("intencao")
+  );
+}
+
 // ── Hook ───────────────────────────────────────────────────────────────
 
 export function useDashboardRealtime({ onDashboardUpdate, onBigFiveRespostaRegistrada, onOpiniaoRespostaRegistrada, onIntencaoVotoRespostaRegistrada }: RealtimeCallbacks): RealtimeState {
@@ -113,14 +134,11 @@ export function useDashboardRealtime({ onDashboardUpdate, onBigFiveRespostaRegis
   useEffect(() => { intencaoVotoRef.current = onIntencaoVotoRespostaRegistrada; }, [onIntencaoVotoRespostaRegistrada]);
 
   useEffect(() => {
-    const normalizeModule = (value?: string) =>
-      typeof value === "string" ? value.trim().toLowerCase() : "";
-
     // ── Window events (dev/testes) ──────────────────────────────────
     const handleWindowEvent = (event: Event) => {
       const detail = (event as CustomEvent<{ event?: string; module?: string }>).detail;
       const type = detail?.event ?? event.type;
-      const module = normalizeModule(detail?.module);
+      const module = normalizeModuleName(detail?.module);
 
       if (type === "dashboard:bigfive:resposta-registrada") {
         bigFiveRef.current();
@@ -134,7 +152,7 @@ export function useDashboardRealtime({ onDashboardUpdate, onBigFiveRespostaRegis
         return;
       }
 
-      if (type === "dashboard:intencao:resposta-registrada") {
+      if (INTENCAO_EVENT_NAMES.includes(type as (typeof INTENCAO_EVENT_NAMES)[number])) {
         intencaoVotoRef.current?.();
         setCounts((prev) => ({ ...prev, voto: prev.voto + 1 }));
         return;
@@ -150,7 +168,7 @@ export function useDashboardRealtime({ onDashboardUpdate, onBigFiveRespostaRegis
         setCounts((prev) => ({ ...prev, opiniao: prev.opiniao + 1 }));
       }
 
-      if (module === "intencao-voto" || module === "intencao" || module === "voto") {
+      if (isIntencaoModule(module)) {
         setCounts((prev) => ({ ...prev, voto: prev.voto + 1 }));
       }
     };
@@ -158,7 +176,9 @@ export function useDashboardRealtime({ onDashboardUpdate, onBigFiveRespostaRegis
     window.addEventListener("dashboard:update", handleWindowEvent as EventListener);
     window.addEventListener("dashboard:bigfive:resposta-registrada", handleWindowEvent as EventListener);
     window.addEventListener("dashboard:opiniao:resposta-registrada", handleWindowEvent as EventListener);
-    window.addEventListener("dashboard:intencao:resposta-registrada", handleWindowEvent as EventListener);
+    INTENCAO_EVENT_NAMES.forEach((eventName) => {
+      window.addEventListener(eventName, handleWindowEvent as EventListener);
+    });
 
     // ── Socket.io (singleton) ───────────────────────────────────────
     const socket = acquireSocket();
@@ -189,7 +209,7 @@ export function useDashboardRealtime({ onDashboardUpdate, onBigFiveRespostaRegis
     };
 
     const onUpdate = (data?: { module?: string }) => {
-      const module = normalizeModule(data?.module);
+      const module = normalizeModuleName(data?.module);
       updateRef.current(module || undefined);
 
       if (module === "senso-populacional") {
@@ -200,7 +220,7 @@ export function useDashboardRealtime({ onDashboardUpdate, onBigFiveRespostaRegis
         setCounts((prev) => ({ ...prev, opiniao: prev.opiniao + 1 }));
       }
 
-      if (module === "intencao-voto" || module === "intencao" || module === "voto") {
+      if (isIntencaoModule(module)) {
         setCounts((prev) => ({ ...prev, voto: prev.voto + 1 }));
       }
     };
@@ -210,7 +230,9 @@ export function useDashboardRealtime({ onDashboardUpdate, onBigFiveRespostaRegis
     socket.on("connect_error", onConnectError);
     socket.on("dashboard:bigfive:resposta-registrada", onBigFive);
     socket.on("dashboard:opiniao:resposta-registrada", onOpiniao);
-    socket.on("dashboard:intencao:resposta-registrada", onIntencaoVoto);
+    INTENCAO_EVENT_NAMES.forEach((eventName) => {
+      socket.on(eventName, onIntencaoVoto);
+    });
     socket.on("dashboard:update", onUpdate);
 
     return () => {
@@ -220,13 +242,17 @@ export function useDashboardRealtime({ onDashboardUpdate, onBigFiveRespostaRegis
       socket.off("connect_error", onConnectError);
       socket.off("dashboard:bigfive:resposta-registrada", onBigFive);
       socket.off("dashboard:opiniao:resposta-registrada", onOpiniao);
-      socket.off("dashboard:intencao:resposta-registrada", onIntencaoVoto);
+      INTENCAO_EVENT_NAMES.forEach((eventName) => {
+        socket.off(eventName, onIntencaoVoto);
+      });
       socket.off("dashboard:update", onUpdate);
 
       window.removeEventListener("dashboard:update", handleWindowEvent as EventListener);
       window.removeEventListener("dashboard:bigfive:resposta-registrada", handleWindowEvent as EventListener);
       window.removeEventListener("dashboard:opiniao:resposta-registrada", handleWindowEvent as EventListener);
-      window.removeEventListener("dashboard:intencao:resposta-registrada", handleWindowEvent as EventListener);
+      INTENCAO_EVENT_NAMES.forEach((eventName) => {
+        window.removeEventListener(eventName, handleWindowEvent as EventListener);
+      });
 
       // Libera a referencia; só desconecta de verdade quando nenhum hook usa
       releaseSocket();
