@@ -39,6 +39,49 @@ type IbgeLocalidadeNomeada = {
   nome: string;
 };
 
+const ESTADOS_BRASIL_FALLBACK: EstadoOption[] = [
+  { id: 12, sigla: "AC", nome: "Acre" },
+  { id: 27, sigla: "AL", nome: "Alagoas" },
+  { id: 16, sigla: "AP", nome: "Amapa" },
+  { id: 13, sigla: "AM", nome: "Amazonas" },
+  { id: 29, sigla: "BA", nome: "Bahia" },
+  { id: 23, sigla: "CE", nome: "Ceara" },
+  { id: 53, sigla: "DF", nome: "Distrito Federal" },
+  { id: 32, sigla: "ES", nome: "Espirito Santo" },
+  { id: 52, sigla: "GO", nome: "Goias" },
+  { id: 21, sigla: "MA", nome: "Maranhao" },
+  { id: 51, sigla: "MT", nome: "Mato Grosso" },
+  { id: 50, sigla: "MS", nome: "Mato Grosso do Sul" },
+  { id: 31, sigla: "MG", nome: "Minas Gerais" },
+  { id: 15, sigla: "PA", nome: "Para" },
+  { id: 25, sigla: "PB", nome: "Paraiba" },
+  { id: 41, sigla: "PR", nome: "Parana" },
+  { id: 26, sigla: "PE", nome: "Pernambuco" },
+  { id: 22, sigla: "PI", nome: "Piaui" },
+  { id: 33, sigla: "RJ", nome: "Rio de Janeiro" },
+  { id: 24, sigla: "RN", nome: "Rio Grande do Norte" },
+  { id: 43, sigla: "RS", nome: "Rio Grande do Sul" },
+  { id: 11, sigla: "RO", nome: "Rondonia" },
+  { id: 14, sigla: "RR", nome: "Roraima" },
+  { id: 42, sigla: "SC", nome: "Santa Catarina" },
+  { id: 35, sigla: "SP", nome: "Sao Paulo" },
+  { id: 28, sigla: "SE", nome: "Sergipe" },
+  { id: 17, sigla: "TO", nome: "Tocantins" },
+];
+
+function isEstadosPath(path: string) {
+  return path.startsWith("/estados?");
+}
+
+function getEstadosFallbackResult<T>(): ApiResult<T> {
+  return {
+    ok: true,
+    status: 200,
+    data: sortByNome(ESTADOS_BRASIL_FALLBACK) as T,
+    message: "ok",
+  };
+}
+
 type TimedCacheEntry<T> = {
   value: Promise<ApiResult<T>>;
   expiresAt: number;
@@ -172,14 +215,22 @@ function sortByNome<T extends { nome: string }>(items: T[]) {
 
 async function requestPublicApi<T>(path: string, fallbackMessage: string): Promise<ApiResult<T>> {
   try {
-    const response = await fetch(`${IBGE_BASE_URL}${path}`, {
+    const url = `${IBGE_BASE_URL}${path}`;
+    console.log(`[localidades-service] Requisição iniciada: ${url}`);
+    const response = await fetch(url, {
       method: "GET",
-      cache: "force-cache",
+      headers: {
+        "Accept": "application/json",
+      },
     });
 
-    const payload = await response.json().catch(() => null);
-
     if (!response.ok) {
+      if (isEstadosPath(path)) {
+        console.warn("[localidades-service] IBGE indisponivel para estados, usando fallback local.");
+        return getEstadosFallbackResult<T>();
+      }
+
+      console.error(`[localidades-service] Erro na API - Status ${response.status}: ${fallbackMessage}`);
       return {
         ok: false,
         status: response.status,
@@ -188,13 +239,42 @@ async function requestPublicApi<T>(path: string, fallbackMessage: string): Promi
       };
     }
 
+    const payload = await response.json().catch((parseError) => {
+      console.error(`[localidades-service] Erro ao fazer parse JSON:`, parseError);
+      return null;
+    });
+
+    if (!payload) {
+      if (isEstadosPath(path)) {
+        console.warn("[localidades-service] Resposta de estados vazia, usando fallback local.");
+        return getEstadosFallbackResult<T>();
+      }
+
+      console.error(`[localidades-service] Resposta vazia`);
+      return {
+        ok: false,
+        status: response.status,
+        data: null,
+        message: "Resposta vazia da API",
+      };
+    }
+
+    console.log(`[localidades-service] Sucesso na API - Status ${response.status}, Items: ${Array.isArray(payload) ? payload.length : 0}`);
     return {
       ok: true,
       status: response.status,
       data: payload as T,
       message: "ok",
     };
-  } catch {
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+
+    if (isEstadosPath(path)) {
+      console.warn(`[localidades-service] Falha de rede ao buscar estados (${errorMsg}), usando fallback local.`);
+      return getEstadosFallbackResult<T>();
+    }
+
+    console.error(`[localidades-service] Erro de requisição: ${errorMsg}`);
     return {
       ok: false,
       status: 0,
@@ -267,10 +347,12 @@ function normalizeBairros(payload: IbgeLocalidadeNomeada[] | null): BairroOption
 export async function carregarEstadosBrasileiros() {
   const timestamp = now();
   if (estadosCache && !isExpired(estadosCache.expiresAt, timestamp)) {
+    console.log("[localidades-service] Usando cache de estados");
     touchEntry(estadosCache, timestamp);
     return estadosCache.value;
   }
 
+  console.log("[localidades-service] Carregando estados (sem cache)");
   const value = (async () => {
       const result = await requestPublicApi<IbgeEstado[]>(
         "/estados?orderBy=nome",
@@ -278,16 +360,25 @@ export async function carregarEstadosBrasileiros() {
       );
 
       if (!result.ok) {
+        console.error("[localidades-service] Falha ao carregar estados", result.message);
         return result as ApiResult<EstadoOption[]>;
       }
 
+      const normalized = normalizeEstados(result.data);
+      console.log(`[localidades-service] Estados carregados com sucesso: ${normalized.length} items`);
       return {
         ok: true,
         status: result.status,
-        data: normalizeEstados(result.data),
+        data: normalized,
         message: "ok",
       } satisfies ApiResult<EstadoOption[]>;
-    })();
+    })().then((result) => {
+      if (!result.ok && estadosCache?.value === value) {
+        estadosCache = null;
+      }
+
+      return result;
+    });
 
   estadosCache = {
     value,
@@ -300,8 +391,10 @@ export async function carregarEstadosBrasileiros() {
 
 export async function carregarCidadesPorUf(siglaUf: string) {
   const key = siglaUf.trim().toUpperCase();
+  console.log(`[localidades-service] Carregando cidades para UF: ${key}`);
   const cached = getCachedEntry(cidadesCache, key);
   if (cached) {
+    console.log(`[localidades-service] Usando cache de cidades para ${key}`);
     return cached;
   }
 
@@ -309,6 +402,7 @@ export async function carregarCidadesPorUf(siglaUf: string) {
         const estadosResult = await carregarEstadosBrasileiros();
 
         if (!estadosResult.ok || !estadosResult.data) {
+          console.error(`[localidades-service] Falha ao carregar estados para ${key}`);
           return {
             ok: false,
             status: estadosResult.status,
@@ -320,6 +414,7 @@ export async function carregarCidadesPorUf(siglaUf: string) {
         const estado = estadosResult.data.find((item) => item.sigla === key);
 
         if (!estado) {
+          console.error(`[localidades-service] Estado ${key} não encontrado`);
           return {
             ok: false,
             status: 404,
@@ -328,22 +423,32 @@ export async function carregarCidadesPorUf(siglaUf: string) {
           } satisfies ApiResult<CidadeOption[]>;
         }
 
+        console.log(`[localidades-service] Carregando cidades para estado ID ${estado.id}`);
         const result = await requestPublicApi<IbgeCidade[]>(
           `/estados/${estado.id}/municipios?orderBy=nome`,
           "Falha ao carregar cidades na API publica do IBGE.",
         );
 
         if (!result.ok) {
+          console.error(`[localidades-service] Falha ao carregar cidades para ${key}`);
           return result as ApiResult<CidadeOption[]>;
         }
 
+        const normalized = normalizeCidades(result.data);
+        console.log(`[localidades-service] Cidades carregadas para ${key}: ${normalized.length} items`);
         return {
           ok: true,
           status: result.status,
-          data: normalizeCidades(result.data),
+          data: normalized,
           message: "ok",
         } satisfies ApiResult<CidadeOption[]>;
-      })();
+      })().then((result) => {
+        if (!result.ok) {
+          cidadesCache.delete(key);
+        }
+
+        return result;
+      });
 
   setCachedEntry(
     cidadesCache,

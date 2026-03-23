@@ -301,21 +301,28 @@ export type DashboardAuditoriaRegistroEntrevistador = {
   respondidoEm?: string;
   participante?: { id?: string; nome?: string | null };
   pesquisa?: { id?: string; titulo?: string | null; cargo?: string | null };
-  candidato?: { id?: string; nome?: string | null; partido?: string | null };
+  campanha?: { id?: string; nome?: string | null } | null;
+  questionario?: { id?: string; titulo?: string | null } | null;
+  candidato?: { id?: string; nome?: string | null; partido?: string | null; fotoUrl?: string | null } | null;
   canal?: string | null;
   idade?: number | null;
+  telefone?: string | null;
   localizacao?: {
     estado?: string | null;
     cidade?: string | null;
     bairro?: string | null;
     latitude?: number | null;
     longitude?: number | null;
-  };
+  } | null;
+  classificacao?: string | null;
+  interpretacao?: string | null;
   ip?: string | null;
-  respostas?: Array<{
-    pergunta?: { id?: string; texto?: string | null };
-    resposta?: { id?: string; texto?: string | null };
-  }>;
+  respostas?:
+    | Array<{
+        pergunta?: { id?: string; texto?: string | null };
+        resposta?: { id?: string; texto?: string | null };
+      }>
+    | Record<string, string | number | null>;
 };
 
 export type DashboardAuditoriaEntrevistadorDetalhes = {

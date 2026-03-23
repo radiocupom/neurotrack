@@ -102,34 +102,127 @@ export function DashboardSensoBigFive({ loggedUser }: DashboardSensoBigFiveProps
   // ── localidades (IBGE) ───────────────────────────────────────────────────
   const [estados, setEstados] = useState<EstadoOption[]>([]);
   const [cidadesSenso, setCidadesSenso] = useState<CidadeOption[]>([]);
+  const [loadingEstados, setLoadingEstados] = useState(false);
   const [loadingCidadesSenso, setLoadingCidadesSenso] = useState(false);
   const [cidadesBigFive, setCidadesBigFive] = useState<CidadeOption[]>([]);
   const [loadingCidadesBigFive, setLoadingCidadesBigFive] = useState(false);
+  const [localidadesError, setLocalidadesError] = useState<string | null>(null);
 
   useEffect(() => {
-    void carregarEstadosBrasileiros().then((result) => {
-      if (result.ok && result.data) setEstados(result.data);
-    });
+    let canceled = false;
+
+    const loadEstados = async () => {
+      setLoadingEstados(true);
+      setLocalidadesError(null);
+
+      try {
+        const result = await carregarEstadosBrasileiros();
+        if (!result.ok || !result.data) {
+          throw new Error(result.message || "Falha ao carregar estados.");
+        }
+
+        if (!canceled) {
+          setEstados(result.data);
+        }
+      } catch (error) {
+        if (!canceled) {
+          setEstados([]);
+          setLocalidadesError(error instanceof Error ? error.message : "Falha ao carregar estados.");
+        }
+      } finally {
+        if (!canceled) {
+          setLoadingEstados(false);
+        }
+      }
+    };
+
+    void loadEstados();
+
+    return () => {
+      canceled = true;
+    };
   }, []);
 
   useEffect(() => {
-    const estadoAtual = String(sensoFilters.estado ?? "");
-    if (!estadoAtual) { setCidadesSenso([]); return; }
-    setLoadingCidadesSenso(true);
-    void carregarCidadesPorUf(estadoAtual).then((result) => {
-      setCidadesSenso(result.ok && result.data ? result.data : []);
-      setLoadingCidadesSenso(false);
-    });
+    const estadoAtual = String(sensoFilters.estado ?? "").trim();
+    if (!estadoAtual) {
+      setCidadesSenso([]);
+      return;
+    }
+
+    let canceled = false;
+
+    const loadCidadesSenso = async () => {
+      setLoadingCidadesSenso(true);
+      setLocalidadesError(null);
+
+      try {
+        const result = await carregarCidadesPorUf(estadoAtual);
+        if (!result.ok || !result.data) {
+          throw new Error(result.message || "Falha ao carregar cidades.");
+        }
+
+        if (!canceled) {
+          setCidadesSenso(result.data);
+        }
+      } catch (error) {
+        if (!canceled) {
+          setCidadesSenso([]);
+          setLocalidadesError(error instanceof Error ? error.message : "Falha ao carregar cidades.");
+        }
+      } finally {
+        if (!canceled) {
+          setLoadingCidadesSenso(false);
+        }
+      }
+    };
+
+    void loadCidadesSenso();
+
+    return () => {
+      canceled = true;
+    };
   }, [sensoFilters.estado]);
 
   useEffect(() => {
-    const estadoAtual = String(bigFiveFilters.estado ?? "");
-    if (!estadoAtual) { setCidadesBigFive([]); return; }
-    setLoadingCidadesBigFive(true);
-    void carregarCidadesPorUf(estadoAtual).then((result) => {
-      setCidadesBigFive(result.ok && result.data ? result.data : []);
-      setLoadingCidadesBigFive(false);
-    });
+    const estadoAtual = String(bigFiveFilters.estado ?? "").trim();
+    if (!estadoAtual) {
+      setCidadesBigFive([]);
+      return;
+    }
+
+    let canceled = false;
+
+    const loadCidadesBigFive = async () => {
+      setLoadingCidadesBigFive(true);
+      setLocalidadesError(null);
+
+      try {
+        const result = await carregarCidadesPorUf(estadoAtual);
+        if (!result.ok || !result.data) {
+          throw new Error(result.message || "Falha ao carregar cidades.");
+        }
+
+        if (!canceled) {
+          setCidadesBigFive(result.data);
+        }
+      } catch (error) {
+        if (!canceled) {
+          setCidadesBigFive([]);
+          setLocalidadesError(error instanceof Error ? error.message : "Falha ao carregar cidades.");
+        }
+      } finally {
+        if (!canceled) {
+          setLoadingCidadesBigFive(false);
+        }
+      }
+    };
+
+    void loadCidadesBigFive();
+
+    return () => {
+      canceled = true;
+    };
   }, [bigFiveFilters.estado]);
 
   const { isConnected } = useDashboardRealtime({
@@ -367,6 +460,13 @@ export function DashboardSensoBigFive({ loggedUser }: DashboardSensoBigFiveProps
                   {totalFiltrosSenso} ativos
                 </span>
               </div>
+
+              {localidadesError ? (
+                <p className="mb-3 rounded-lg border border-amber-300/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+                  {localidadesError}
+                </p>
+              ) : null}
+
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                 <label className="block text-sm text-slate-300 lg:col-span-2">
                   <span className="mb-1 block">Questionario de Senso</span>
@@ -388,8 +488,9 @@ export function DashboardSensoBigFive({ loggedUser }: DashboardSensoBigFiveProps
                     value={String(sensoFilters.estado ?? "")}
                     onChange={(event) => patchFilters("senso", { estado: event.target.value, cidade: "", offset: 0 })}
                     className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
+                    disabled={loadingEstados}
                   >
-                    <option value="">Todos</option>
+                    <option value="">{loadingEstados ? "Carregando..." : "Todos"}</option>
                     {estados.map((e) => (
                       <option key={e.sigla} value={e.sigla}>{e.sigla} — {e.nome}</option>
                     ))}
@@ -402,7 +503,7 @@ export function DashboardSensoBigFive({ loggedUser }: DashboardSensoBigFiveProps
                     value={String(sensoFilters.cidade ?? "")}
                     onChange={(event) => patchFilters("senso", { cidade: event.target.value, offset: 0 })}
                     className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                    disabled={!sensoFilters.estado || loadingCidadesSenso}
+                    disabled={!sensoFilters.estado || loadingCidadesSenso || loadingEstados}
                   >
                     <option value="">{loadingCidadesSenso ? "Carregando..." : "Todas"}</option>
                     {cidadesSenso.map((c) => (
@@ -438,36 +539,6 @@ export function DashboardSensoBigFive({ loggedUser }: DashboardSensoBigFiveProps
                     onChange={(event) => patchFilters("senso", { contato: event.target.value, offset: 0 })}
                     className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
                     placeholder="Telefone"
-                  />
-                </label>
-
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-1 block">IP</span>
-                  <input
-                    value={String(sensoFilters.ip ?? "")}
-                    onChange={(event) => patchFilters("senso", { ip: event.target.value, offset: 0 })}
-                    className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                    placeholder="192.168.1.1"
-                  />
-                </label>
-
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-1 block">Participante ID</span>
-                  <input
-                    value={String(sensoFilters.participanteId ?? "")}
-                    onChange={(event) => patchFilters("senso", { participanteId: event.target.value, offset: 0 })}
-                    className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                    placeholder="UUID ou lista por virgula"
-                  />
-                </label>
-
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-1 block">Entrevistador ID</span>
-                  <input
-                    value={String(sensoFilters.entrevistadorId ?? "")}
-                    onChange={(event) => patchFilters("senso", { entrevistadorId: event.target.value, offset: 0 })}
-                    className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                    placeholder="UUID ou lista por virgula"
                   />
                 </label>
 
@@ -690,6 +761,13 @@ export function DashboardSensoBigFive({ loggedUser }: DashboardSensoBigFiveProps
                   {totalFiltrosBigFive} ativos
                 </span>
               </div>
+
+              {localidadesError ? (
+                <p className="mb-3 rounded-lg border border-amber-300/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+                  {localidadesError}
+                </p>
+              ) : null}
+
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                 <label className="block text-sm text-slate-300">
                   <span className="mb-1 block">Classificacao</span>
@@ -711,8 +789,9 @@ export function DashboardSensoBigFive({ loggedUser }: DashboardSensoBigFiveProps
                     value={String(bigFiveFilters.estado ?? "")}
                     onChange={(event) => patchFilters("bigfive", { estado: event.target.value, cidade: "", offset: 0 })}
                     className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
+                    disabled={loadingEstados}
                   >
-                    <option value="">Todos</option>
+                    <option value="">{loadingEstados ? "Carregando..." : "Todos"}</option>
                     {estados.map((e) => (
                       <option key={e.sigla} value={e.sigla}>{e.sigla} — {e.nome}</option>
                     ))}
@@ -724,7 +803,7 @@ export function DashboardSensoBigFive({ loggedUser }: DashboardSensoBigFiveProps
                     value={String(bigFiveFilters.cidade ?? "")}
                     onChange={(event) => patchFilters("bigfive", { cidade: event.target.value, offset: 0 })}
                     className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                    disabled={!bigFiveFilters.estado || loadingCidadesBigFive}
+                    disabled={!bigFiveFilters.estado || loadingCidadesBigFive || loadingEstados}
                   >
                     <option value="">{loadingCidadesBigFive ? "Carregando..." : "Todas"}</option>
                     {cidadesBigFive.map((c) => (
@@ -739,14 +818,6 @@ export function DashboardSensoBigFive({ loggedUser }: DashboardSensoBigFiveProps
                     onChange={(event) => patchFilters("bigfive", { bairro: event.target.value, offset: 0 })}
                     className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
                     placeholder="Centro, Liberdade"
-                  />
-                </label>
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-1 block">Questionario Senso ID</span>
-                  <input
-                    value={String(bigFiveFilters.questionarioId ?? "")}
-                    onChange={(event) => patchFilters("bigfive", { questionarioId: event.target.value, offset: 0 })}
-                    className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
                   />
                 </label>
                 <label className="block text-sm text-slate-300">
@@ -768,33 +839,6 @@ export function DashboardSensoBigFive({ loggedUser }: DashboardSensoBigFiveProps
                   />
                 </label>
                 <label className="block text-sm text-slate-300">
-                  <span className="mb-1 block">IP</span>
-                  <input
-                    value={String(bigFiveFilters.ip ?? "")}
-                    onChange={(event) => patchFilters("bigfive", { ip: event.target.value, offset: 0 })}
-                    className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                    placeholder="192.168.1.1"
-                  />
-                </label>
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-1 block">Participante ID</span>
-                  <input
-                    value={String(bigFiveFilters.participanteId ?? "")}
-                    onChange={(event) => patchFilters("bigfive", { participanteId: event.target.value, offset: 0 })}
-                    className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                    placeholder="UUID ou lista por virgula"
-                  />
-                </label>
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-1 block">Entrevistador ID</span>
-                  <input
-                    value={String(bigFiveFilters.entrevistadorId ?? "")}
-                    onChange={(event) => patchFilters("bigfive", { entrevistadorId: event.target.value, offset: 0 })}
-                    className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                    placeholder="UUID ou lista por virgula"
-                  />
-                </label>
-                <label className="block text-sm text-slate-300">
                   <span className="mb-1 block">Respondido de</span>
                   <input
                     type="date"
@@ -809,96 +853,6 @@ export function DashboardSensoBigFive({ loggedUser }: DashboardSensoBigFiveProps
                     type="date"
                     value={String(bigFiveFilters.respondidoAte ?? "")}
                     onChange={(event) => patchFilters("bigfive", { respondidoAte: event.target.value, offset: 0 })}
-                    className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                  />
-                </label>
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-1 block">Abertura min</span>
-                  <input
-                    type="number"
-                    value={String(bigFiveFilters.aberturaMin ?? "")}
-                    onChange={(event) => patchFilters("bigfive", { aberturaMin: event.target.value, offset: 0 })}
-                    className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                  />
-                </label>
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-1 block">Abertura max</span>
-                  <input
-                    type="number"
-                    value={String(bigFiveFilters.aberturaMax ?? "")}
-                    onChange={(event) => patchFilters("bigfive", { aberturaMax: event.target.value, offset: 0 })}
-                    className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                  />
-                </label>
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-1 block">Consciencia min</span>
-                  <input
-                    type="number"
-                    value={String(bigFiveFilters.conscienciaMin ?? "")}
-                    onChange={(event) => patchFilters("bigfive", { conscienciaMin: event.target.value, offset: 0 })}
-                    className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                  />
-                </label>
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-1 block">Consciencia max</span>
-                  <input
-                    type="number"
-                    value={String(bigFiveFilters.conscienciaMax ?? "")}
-                    onChange={(event) => patchFilters("bigfive", { conscienciaMax: event.target.value, offset: 0 })}
-                    className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                  />
-                </label>
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-1 block">Extroversao min</span>
-                  <input
-                    type="number"
-                    value={String(bigFiveFilters.extroversaoMin ?? "")}
-                    onChange={(event) => patchFilters("bigfive", { extroversaoMin: event.target.value, offset: 0 })}
-                    className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                  />
-                </label>
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-1 block">Extroversao max</span>
-                  <input
-                    type="number"
-                    value={String(bigFiveFilters.extroversaoMax ?? "")}
-                    onChange={(event) => patchFilters("bigfive", { extroversaoMax: event.target.value, offset: 0 })}
-                    className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                  />
-                </label>
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-1 block">Amabilidade min</span>
-                  <input
-                    type="number"
-                    value={String(bigFiveFilters.amabilidadeMin ?? "")}
-                    onChange={(event) => patchFilters("bigfive", { amabilidadeMin: event.target.value, offset: 0 })}
-                    className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                  />
-                </label>
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-1 block">Amabilidade max</span>
-                  <input
-                    type="number"
-                    value={String(bigFiveFilters.amabilidadeMax ?? "")}
-                    onChange={(event) => patchFilters("bigfive", { amabilidadeMax: event.target.value, offset: 0 })}
-                    className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                  />
-                </label>
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-1 block">Neuroticismo min</span>
-                  <input
-                    type="number"
-                    value={String(bigFiveFilters.neuroticismoMin ?? "")}
-                    onChange={(event) => patchFilters("bigfive", { neuroticismoMin: event.target.value, offset: 0 })}
-                    className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                  />
-                </label>
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-1 block">Neuroticismo max</span>
-                  <input
-                    type="number"
-                    value={String(bigFiveFilters.neuroticismoMax ?? "")}
-                    onChange={(event) => patchFilters("bigfive", { neuroticismoMax: event.target.value, offset: 0 })}
                     className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
                   />
                 </label>

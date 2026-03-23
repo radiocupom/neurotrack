@@ -45,6 +45,7 @@ import {
 	type ApiEtapaAtual,
 	type NormalizedJornadaState,
 } from "@/app/sensobigfive/normalize-jornada-state";
+import type { CanalBigFive } from "@/service/bigfive.service";
 import type { PrecheckJornadaPublicaSenso } from "@/service/sensoPopulacional.service";
 
 type Participante = {
@@ -124,6 +125,7 @@ const DEFAULT_BIGFIVE: Record<ScoreKey, number> = {
 
 const SCORE_KEYS = Object.keys(DEFAULT_BIGFIVE) as ScoreKey[];
 const SCORE_KEYS_SET = new Set<ScoreKey>(SCORE_KEYS);
+const BIGFIVE_CANAIS: CanalBigFive[] = ["WHATSAPP", "TELEFONE", "PRESENCIAL", "OUTRO"];
 
 const SENSO_STEP_MESSAGE = "Participante localizado na jornada. Prosseguindo para a aplicacao da pesquisa.";
 const BIGFIVE_STEP_MESSAGE = "Senso ja respondido nesta campanha. Prosseguindo diretamente para o Big Five.";
@@ -343,6 +345,9 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 	const [loadingCidades, setLoadingCidades] = useState(false);
 	const [respostasSenso, setRespostasSenso] = useState<Record<string, string>>({});
 	const [scores, setScores] = useState<Record<ScoreKey, number>>(DEFAULT_BIGFIVE);
+	const [canalBigFive, setCanalBigFive] = useState<"" | CanalBigFive>("");
+	const [idadeBigFive, setIdadeBigFive] = useState("");
+	const [telefoneBigFive, setTelefoneBigFive] = useState("");
 
 	const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 	const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -421,6 +426,9 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 		setError("");
 		setConfirmModalOpen(false);
 		setCreateModalOpen(false);
+		setCanalBigFive("");
+		setIdadeBigFive("");
+		setTelefoneBigFive("");
 		setJornadaState((current) =>
 			normalizeJornadaState({
 				fallback: {
@@ -454,6 +462,9 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 		setCidades([]);
 		setRespostasSenso({});
 		setScores(DEFAULT_BIGFIVE);
+		setCanalBigFive("");
+		setIdadeBigFive("");
+		setTelefoneBigFive("");
 		setProcessingSenso(false);
 		clearConfirmationModalFields();
 		setJornadaState(
@@ -778,6 +789,17 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 		};
 	}, [step, bigFiveQuestionario]);
 
+	useEffect(() => {
+		if (telefoneBigFive.trim()) {
+			return;
+		}
+
+		const telefoneBase = store.telefone || participante?.contatoOpcional || participante?.telefone || "";
+		if (telefoneBase.trim()) {
+			setTelefoneBigFive(telefoneBase.trim());
+		}
+	}, [store.telefone, participante?.contatoOpcional, participante?.telefone, telefoneBigFive]);
+
 	async function validarJornadaSelecionada(telefone: string, rawParticipanteId?: string) {
 		const participanteId = rawParticipanteId?.trim() || participante?.id?.trim();
 		const useParticipanteId = Boolean(participanteId && isValidUuid(participanteId));
@@ -1094,9 +1116,35 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 		setError("");
 
 		try {
+			const idadeNormalizada = idadeBigFive.trim();
+			let idadePayload: number | undefined;
+			if (idadeNormalizada) {
+				if (!/^\d+$/.test(idadeNormalizada)) {
+					throw new Error("Idade do Big Five deve ser um numero inteiro entre 0 e 150.");
+				}
+
+				const parsedIdade = Number.parseInt(idadeNormalizada, 10);
+				if (parsedIdade < 0 || parsedIdade > 150) {
+					throw new Error("Idade do Big Five deve estar entre 0 e 150.");
+				}
+
+				idadePayload = parsedIdade;
+			}
+
+			const telefonePayload = telefoneBigFive.trim();
+			const cidadePayload = cidade.trim();
+			const bairroPayload = bairro.trim();
+			const estadoPayload = estado.trim();
+
 			const response = await enviarBigFive({
 				participanteId,
 				campanhaId: campanhaAtualId,
+				canal: canalBigFive || undefined,
+				idade: idadePayload,
+				telefone: telefonePayload || undefined,
+				estado: estadoPayload && (cidadePayload || bairroPayload) ? estadoPayload : undefined,
+				cidade: cidadePayload || undefined,
+				bairro: bairroPayload || undefined,
 				...scores,
 			});
 
@@ -1132,6 +1180,9 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 		setCidades([]);
 		setRespostasSenso({});
 		setScores(DEFAULT_BIGFIVE);
+		setCanalBigFive("");
+		setIdadeBigFive("");
+		setTelefoneBigFive("");
 		setProcessingSenso(false);
 		setBigFiveQuestionario(null);
 		setBigFiveQuestionarioError("");
@@ -1331,6 +1382,61 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 								</div>
 							) : null}
 							<div className="mt-4 space-y-4">
+								<div className="rounded-xl border border-cyan-300/20 bg-cyan-400/10 p-4">
+									<p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">Dados adicionais (opcional)</p>
+									<div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+										<FieldSelect
+											label="Canal"
+											value={canalBigFive}
+											onChange={(value) => setCanalBigFive(value as "" | CanalBigFive)}
+											options={BIGFIVE_CANAIS.map((item) => ({ value: item, label: item }))}
+											disabled={submitting || isBigFiveBlocked || loadingBigFiveQuestionario}
+											placeholder="Selecione o canal"
+										/>
+										<FieldInput
+											label="Idade"
+											value={idadeBigFive}
+											onChange={setIdadeBigFive}
+											placeholder="Ex: 35"
+											disabled={submitting || isBigFiveBlocked || loadingBigFiveQuestionario}
+										/>
+										<FieldInput
+											label="Telefone"
+											value={telefoneBigFive}
+											onChange={setTelefoneBigFive}
+											placeholder="Ex: 5522999999999"
+											disabled={submitting || isBigFiveBlocked || loadingBigFiveQuestionario}
+										/>
+										<FieldSelect
+											label="Estado"
+											value={estado}
+											onChange={setEstado}
+											options={estados.map((item) => ({ value: item.sigla, label: `${item.sigla} - ${item.nome}` }))}
+											disabled={loadingEstados || submitting || isBigFiveBlocked || loadingBigFiveQuestionario}
+											placeholder={loadingEstados ? "Carregando estados..." : "Selecione o estado"}
+										/>
+										<FieldSelect
+											label="Cidade"
+											value={cidadeId ? String(cidadeId) : ""}
+											onChange={(value) => {
+												const selected = cidades.find((item) => String(item.id) === value);
+												setCidadeId(selected?.id ?? null);
+												setCidade(selected?.nome ?? "");
+											}}
+											options={cidades.map((item) => ({ value: String(item.id), label: item.nome }))}
+											disabled={loadingCidades || !estado || submitting || isBigFiveBlocked || loadingBigFiveQuestionario}
+											placeholder={loadingCidades ? "Carregando cidades..." : "Selecione a cidade"}
+										/>
+										<FieldInput
+											label="Bairro"
+											value={bairro}
+											onChange={setBairro}
+											placeholder="Ex: Centro"
+											disabled={submitting || isBigFiveBlocked || loadingBigFiveQuestionario}
+										/>
+									</div>
+								</div>
+
 								{bigFiveQuestionario?.perguntas.map((pergunta) => (
 									<div key={pergunta.campo} className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
 										{pergunta.fator ? <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">{pergunta.fator}</p> : null}

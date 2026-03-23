@@ -6,6 +6,7 @@ import {
   carregarQuestionarioBigFive,
   avaliarBigFiveFromExternalApi,
   obterResultadoBigFiveFromExternalApi,
+  type BigFiveCamposExtrasPayload,
 } from "@/service/bigfive.service";
 import {
   buscarParticipantePorContatoFromExternalApi,
@@ -64,7 +65,7 @@ type ScorePayload = {
   neuro1: number;
   neuro2: number;
   neuro3: number;
-};
+} & BigFiveCamposExtrasPayload;
 
 function readObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : null;

@@ -57,7 +57,11 @@ interface UsePesquisaOpiniaoPublicoState {
     estado: string;
     cidade: string;
     bairro: string;
-  }, respostas: RespostaUsuario[]) => Promise<LoadState>;
+  }, respostas: RespostaUsuario[], metadata?: {
+    canal?: "WHATSAPP" | "TELEFONE" | "PRESENCIAL" | "OUTRO";
+    idade?: number;
+    telefone?: string;
+  }) => Promise<LoadState>;
   limpar: () => void;
 }
 
@@ -180,6 +184,11 @@ export function usePesquisaOpiniaoPublico({
         bairro: string;
       },
       respostas: RespostaUsuario[],
+      metadata?: {
+        canal?: "WHATSAPP" | "TELEFONE" | "PRESENCIAL" | "OUTRO";
+        idade?: number;
+        telefone?: string;
+      },
     ) => {
       // Validações básicas
       if (!participante || !validarParticipante(participante)) {
@@ -202,6 +211,14 @@ export function usePesquisaOpiniaoPublico({
         return "error";
       }
 
+      if (
+        metadata?.idade != null &&
+        (!Number.isInteger(metadata.idade) || metadata.idade < 0 || metadata.idade > 150)
+      ) {
+        setError("Idade invalida. Informe um valor inteiro entre 0 e 150.");
+        return "error";
+      }
+
       setState("validating");
       setError(null);
 
@@ -209,12 +226,14 @@ export function usePesquisaOpiniaoPublico({
         setState("submitting");
 
         const payload: PayloadResponderPublico = {
-          telefone: participante.contato || "",
+          telefone: metadata?.telefone?.trim() || participante.contato || "",
           nome: participante.nome,
           email: participante.email || undefined,
           estado: localizacao.estado.trim(),
           cidade: localizacao.cidade.trim(),
           bairro: localizacao.bairro.trim(),
+          canal: metadata?.canal,
+          idade: metadata?.idade,
           respostas,
         };
 

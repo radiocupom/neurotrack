@@ -122,6 +122,9 @@ export async function responderPesquisaOpiniaoPrivada(payload: {
   estado: string;
   cidade: string;
   bairro: string;
+  canal?: "WHATSAPP" | "TELEFONE" | "PRESENCIAL" | "OUTRO";
+  idade?: number;
+  telefone?: string;
   latitude?: number | null;
   longitude?: number | null;
   respostas: Array<{ perguntaId: string; opcaoRespostaId: string }>;
@@ -143,6 +146,8 @@ export async function responderPesquisaOpiniaoPublica(
     estado: string;
     cidade: string;
     bairro: string;
+    canal?: "WHATSAPP" | "TELEFONE" | "PRESENCIAL" | "OUTRO";
+    idade?: number;
     respostas: Array<{ perguntaId: string; opcaoRespostaId: string }>;
   },
 ): Promise<ApiResult<RespostaRegistrada>> {

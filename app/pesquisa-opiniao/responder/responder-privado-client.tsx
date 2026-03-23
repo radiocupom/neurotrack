@@ -34,6 +34,9 @@ export function ResponderPesquisaPrivadoClient() {
   const [localizacao, setLocalizacao] = useState<Localizacao | null>(null);
   const [respostas, setRespostas] = useState<Record<string, string>>({});
   const [errosValidacao, setErrosValidacao] = useState<Record<string, string>>({});
+  const [canal, setCanal] = useState<"WHATSAPP" | "TELEFONE" | "PRESENCIAL" | "OUTRO">("PRESENCIAL");
+  const [idade, setIdade] = useState("");
+  const [telefone, setTelefone] = useState("");
 
   const { pesquisas, loading: pesquisasLoading } = usePesquisasOpiniao({ autoload: true });
 
@@ -58,6 +61,9 @@ export function ResponderPesquisaPrivadoClient() {
     setRespostas({});
     setErrosValidacao({});
     setLocalizacao(null);
+    setCanal("PRESENCIAL");
+    setIdade("");
+    setTelefone("");
     limpar();
 
     if (id) {
@@ -97,7 +103,11 @@ export function ResponderPesquisaPrivadoClient() {
       ([perguntaId, opcaoRespostaId]) => ({ perguntaId, opcaoRespostaId }),
     );
 
-    const finalState = await responder(localizacao, respostasArray);
+    const finalState = await responder(localizacao, respostasArray, {
+      canal,
+      idade: idade.trim() ? Number(idade) : undefined,
+      telefone: telefone.trim() || undefined,
+    });
     if (finalState === "success" || finalState === "queued") {
       setPasso("resultado");
     }
@@ -109,6 +119,9 @@ export function ResponderPesquisaPrivadoClient() {
     setRespostas({});
     setErrosValidacao({});
     setLocalizacao(null);
+    setCanal("PRESENCIAL");
+    setIdade("");
+    setTelefone("");
     limpar();
   }
 
@@ -229,6 +242,49 @@ export function ResponderPesquisaPrivadoClient() {
               totalPerguntas={perguntas.length}
               totalRespostas={Object.keys(respostas).filter((key) => respostas[key]).length}
             />
+
+            <Card>
+              <h2 className="mb-4 text-xl font-bold text-slate-100">Dados Complementares (opcional)</h2>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="text-sm text-slate-300">
+                  <span className="mb-1 block">Canal</span>
+                  <select
+                    value={canal}
+                    onChange={(event) => setCanal(event.target.value as "WHATSAPP" | "TELEFONE" | "PRESENCIAL" | "OUTRO")}
+                    className="h-10 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
+                  >
+                    <option value="PRESENCIAL">PRESENCIAL</option>
+                    <option value="WHATSAPP">WHATSAPP</option>
+                    <option value="TELEFONE">TELEFONE</option>
+                    <option value="OUTRO">OUTRO</option>
+                  </select>
+                </label>
+
+                <label className="text-sm text-slate-300">
+                  <span className="mb-1 block">Idade</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={150}
+                    value={idade}
+                    onChange={(event) => setIdade(event.target.value)}
+                    placeholder="Ex: 35"
+                    className="h-10 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100 placeholder:text-slate-500"
+                  />
+                </label>
+
+                <label className="text-sm text-slate-300">
+                  <span className="mb-1 block">Telefone</span>
+                  <input
+                    type="text"
+                    value={telefone}
+                    onChange={(event) => setTelefone(event.target.value)}
+                    placeholder="5511999999999"
+                    className="h-10 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100 placeholder:text-slate-500"
+                  />
+                </label>
+              </div>
+            </Card>
 
             <ListaPerguntas
               perguntas={perguntas}

@@ -58,7 +58,11 @@ interface UsePesquisaOpiniaoPrivadoState {
     bairro: string;
     latitude?: number;
     longitude?: number;
-  }, respostas: RespostaUsuario[]) => Promise<LoadState>;
+  }, respostas: RespostaUsuario[], metadata?: {
+    canal?: "WHATSAPP" | "TELEFONE" | "PRESENCIAL" | "OUTRO";
+    idade?: number;
+    telefone?: string;
+  }) => Promise<LoadState>;
   limpar: () => void;
 }
 
@@ -207,6 +211,11 @@ export function usePesquisaOpiniaoPrivado({
         longitude?: number;
       },
       respostas: RespostaUsuario[],
+      metadata?: {
+        canal?: "WHATSAPP" | "TELEFONE" | "PRESENCIAL" | "OUTRO";
+        idade?: number;
+        telefone?: string;
+      },
     ) => {
       // Validações básicas
       if (!participante || !validarParticipante(participante)) {
@@ -229,6 +238,14 @@ export function usePesquisaOpiniaoPrivado({
         return "error";
       }
 
+      if (
+        metadata?.idade != null &&
+        (!Number.isInteger(metadata.idade) || metadata.idade < 0 || metadata.idade > 150)
+      ) {
+        setError("Idade invalida. Informe um valor inteiro entre 0 e 150.");
+        return "error";
+      }
+
       setState("validating");
       setError(null);
 
@@ -241,6 +258,9 @@ export function usePesquisaOpiniaoPrivado({
           estado: localizacao.estado.trim(),
           cidade: localizacao.cidade.trim(),
           bairro: localizacao.bairro.trim(),
+          canal: metadata?.canal,
+          idade: metadata?.idade,
+          telefone: metadata?.telefone?.trim() || participante.contato || undefined,
           latitude: localizacao.latitude,
           longitude: localizacao.longitude,
           respostas,

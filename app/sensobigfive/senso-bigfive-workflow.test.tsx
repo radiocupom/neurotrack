@@ -84,8 +84,9 @@ function createJsonResponse(data: unknown, status = 200) {
 
 function setupFetchSequence(responses: Response[]) {
   const queue = [...responses];
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
 
-  const fetchMock = mock.fn(async (input: RequestInfo | URL) => {
+  const fetchMock = mock.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url =
       typeof input === "string"
         ? input
@@ -94,6 +95,8 @@ function setupFetchSequence(responses: Response[]) {
           : "url" in input
             ? input.url
             : "";
+
+    requests.push({ url, init });
 
     if (url.includes("servicodados.ibge.gov.br/api/v1/localidades/estados?orderBy=nome")) {
       return createJsonResponse([
@@ -121,7 +124,7 @@ function setupFetchSequence(responses: Response[]) {
 
   global.fetch = fetchMock as typeof fetch;
 
-  return fetchMock;
+  return { fetchMock, requests };
 }
 
 describe("normalizeJornadaState", () => {
@@ -270,7 +273,7 @@ describe("SensoBigFiveWorkflow", () => {
   });
 
   it("executa fluxo feliz completo", async () => {
-    setupFetchSequence([
+    const { requests } = setupFetchSequence([
       createJsonResponse(QUESTIONARIO_BASE),
       createJsonResponse([{ id: CAMPANHA_ID, nome: "Senso Araruama", questionarioId: QUESTIONARIO_ID, ativo: true }]),
       createJsonResponse([{ id: QUESTIONARIO_ID, nome: "Questionario Base" }]),
@@ -306,6 +309,18 @@ describe("SensoBigFiveWorkflow", () => {
     fireEvent.click(screen.getByRole("button", { name: "Finalizar Big Five" }));
 
     await screen.findByText("Pesquisa concluida com sucesso. Jornada finalizada e pronta para nova aplicacao.");
+
+    const bigFiveRequest = requests.find((entry) => entry.url.includes("/bigfive/avaliar"));
+    assert.ok(bigFiveRequest, "Request de Big Five nao foi enviada.");
+
+    const payload = bigFiveRequest?.init?.body as string | undefined;
+    assert.ok(payload, "Payload de Big Five nao foi enviado.");
+
+    const parsedPayload = JSON.parse(payload ?? "{}") as Record<string, unknown>;
+    assert.equal(parsedPayload.telefone, "55999999999");
+    assert.equal(parsedPayload.estado, "SP");
+    assert.equal(parsedPayload.cidade, "Sao Paulo");
+    assert.equal(parsedPayload.bairro, "1");
   });
 
   it("bloqueia formulario Big Five quando precheck sinaliza podeResponderBigFive false", async () => {

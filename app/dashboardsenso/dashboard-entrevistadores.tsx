@@ -79,6 +79,10 @@ function readString(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
+function readNullableString(value: unknown) {
+  return typeof value === "string" ? value : null;
+}
+
 function parseCsvList(value: string) {
   return value
     .split(",")
@@ -159,9 +163,14 @@ function normalizeDetalhes(payload: unknown): DashboardAuditoriaEntrevistadorDet
     const row = asObject(item);
     const participante = asObject(row.participante);
     const pesquisa = asObject(row.pesquisa);
+    const campanha = asObject(row.campanha);
+    const questionario = asObject(row.questionario);
     const candidato = asObject(row.candidato);
     const localizacao = asObject(row.localizacao);
     const respostasRaw = Array.isArray(row.respostas) ? row.respostas : [];
+    const respostasObjeto = row.respostas && typeof row.respostas === "object" && !Array.isArray(row.respostas)
+      ? (row.respostas as Record<string, string | number | null>)
+      : null;
 
     return {
       tipoPesquisa: readString(row.tipoPesquisa) || "INTENCAO",
@@ -176,13 +185,23 @@ function normalizeDetalhes(payload: unknown): DashboardAuditoriaEntrevistadorDet
         titulo: readString(pesquisa.titulo) || null,
         cargo: readString(pesquisa.cargo) || null,
       },
+      campanha: {
+        id: readString(campanha.id) || undefined,
+        nome: readString(campanha.nome) || null,
+      },
+      questionario: {
+        id: readString(questionario.id) || undefined,
+        titulo: readString(questionario.titulo) || null,
+      },
       candidato: {
         id: readString(candidato.id) || undefined,
         nome: readString(candidato.nome) || null,
         partido: readString(candidato.partido) || null,
+        fotoUrl: readNullableString(candidato.fotoUrl),
       },
-      canal: readString(row.canal) || null,
+      canal: readNullableString(row.canal),
       idade: typeof row.idade === "number" ? row.idade : null,
+      telefone: readNullableString(row.telefone),
       localizacao: {
         estado: readString(localizacao.estado) || null,
         cidade: readString(localizacao.cidade) || null,
@@ -190,8 +209,10 @@ function normalizeDetalhes(payload: unknown): DashboardAuditoriaEntrevistadorDet
         latitude: typeof localizacao.latitude === "number" ? localizacao.latitude : null,
         longitude: typeof localizacao.longitude === "number" ? localizacao.longitude : null,
       },
+      classificacao: readNullableString(row.classificacao),
+      interpretacao: readNullableString(row.interpretacao),
       ip: readString(row.ip) || null,
-      respostas: respostasRaw.map((resposta) => {
+      respostas: respostasObjeto ?? respostasRaw.map((resposta) => {
         const respostaRow = asObject(resposta);
         const pergunta = asObject(respostaRow.pergunta);
         const respostaData = asObject(respostaRow.resposta);
@@ -241,6 +262,38 @@ function formatDate(value?: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("pt-BR");
+}
+
+function formatDetalheRegistro(registro: DashboardAuditoriaRegistroEntrevistador) {
+  if (registro.tipoPesquisa === "INTENCAO") {
+    const nome = registro.candidato?.nome || "-";
+    const partido = registro.candidato?.partido ? ` (${registro.candidato.partido})` : "";
+    return `${nome}${partido}`;
+  }
+
+  if (registro.tipoPesquisa === "BIGFIVE") {
+    if (registro.classificacao) {
+      return registro.classificacao;
+    }
+
+    if (registro.interpretacao) {
+      return registro.interpretacao;
+    }
+
+    if (registro.respostas && !Array.isArray(registro.respostas)) {
+      const respostasObjeto = registro.respostas as Record<string, string | number | null>;
+      const keys = Object.keys(respostasObjeto);
+      if (keys.length) {
+        return keys.map((k) => `${k}: ${String(respostasObjeto[k] ?? "-")}`).join(" | ");
+      }
+    }
+  }
+
+  if (Array.isArray(registro.respostas)) {
+    return registro.respostas[0]?.resposta?.texto || "-";
+  }
+
+  return "-";
 }
 
 export type DashboardEntrevistadoresProps = {
@@ -678,9 +731,12 @@ export function DashboardEntrevistadores({ loggedUser }: DashboardEntrevistadore
                         <th className="px-3 py-2 text-left">Respondido em</th>
                         <th className="px-3 py-2 text-left">Participante</th>
                         <th className="px-3 py-2 text-left">Pesquisa</th>
+                        <th className="px-3 py-2 text-left">Campanha</th>
+                        <th className="px-3 py-2 text-left">Questionario</th>
                         <th className="px-3 py-2 text-left">Detalhe</th>
                         <th className="px-3 py-2 text-left">Canal</th>
                         <th className="px-3 py-2 text-left">Idade</th>
+                        <th className="px-3 py-2 text-left">Telefone</th>
                         <th className="px-3 py-2 text-left">Localizacao</th>
                       </tr>
                     </thead>
@@ -691,13 +747,14 @@ export function DashboardEntrevistadores({ loggedUser }: DashboardEntrevistadore
                           <td className="px-3 py-2">{formatDate(registro.respondidoEm)}</td>
                           <td className="px-3 py-2">{registro.participante?.nome || "-"}</td>
                           <td className="px-3 py-2">{registro.pesquisa?.titulo || "-"}</td>
+                          <td className="px-3 py-2">{registro.campanha?.nome || "-"}</td>
+                          <td className="px-3 py-2">{registro.questionario?.titulo || "-"}</td>
                           <td className="px-3 py-2 text-slate-300">
-                            {registro.tipoPesquisa === "INTENCAO"
-                              ? `${registro.candidato?.nome || "-"} ${registro.candidato?.partido ? `(${registro.candidato.partido})` : ""}`
-                              : registro.respostas?.[0]?.resposta?.texto || "-"}
+                            {formatDetalheRegistro(registro)}
                           </td>
                           <td className="px-3 py-2">{registro.canal || "-"}</td>
                           <td className="px-3 py-2">{registro.idade ?? "-"}</td>
+                          <td className="px-3 py-2">{registro.telefone || "-"}</td>
                           <td className="px-3 py-2">
                             {[
                               registro.localizacao?.estado,

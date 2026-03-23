@@ -98,6 +98,9 @@ export type PayloadResponderPrivado = {
   estado: string;
   cidade: string;
   bairro: string;
+  canal?: "WHATSAPP" | "TELEFONE" | "PRESENCIAL" | "OUTRO";
+  idade?: number;
+  telefone?: string;
   latitude?: number | null;
   longitude?: number | null;
   respostas: RespostaUsuario[];
@@ -110,6 +113,8 @@ export type PayloadResponderPublico = {
   estado: string;
   cidade: string;
   bairro: string;
+  canal?: "WHATSAPP" | "TELEFONE" | "PRESENCIAL" | "OUTRO";
+  idade?: number;
   pesquisaId?: string; // Pode vir ou não dependendo da rota
   respostas: RespostaUsuario[];
 };

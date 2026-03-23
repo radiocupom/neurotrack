@@ -241,23 +241,85 @@ export function DashboardVoto({ loggedUser }: DashboardVotoProps) {
   // ── localidades (IBGE) ───────────────────────────────────────────────────
   const [estados, setEstados] = useState<EstadoOption[]>([]);
   const [cidades, setCidades] = useState<CidadeOption[]>([]);
+  const [loadingEstados, setLoadingEstados] = useState(false);
   const [loadingCidades, setLoadingCidades] = useState(false);
+  const [localidadesError, setLocalidadesError] = useState<string | null>(null);
 
   // carrega estados uma vez
   useEffect(() => {
-    void carregarEstadosBrasileiros().then((result) => {
-      if (result.ok && result.data) setEstados(result.data);
-    });
+    let canceled = false;
+
+    const loadEstados = async () => {
+      setLoadingEstados(true);
+      setLocalidadesError(null);
+
+      try {
+        const result = await carregarEstadosBrasileiros();
+        if (!result.ok || !result.data) {
+          throw new Error(result.message || "Falha ao carregar estados.");
+        }
+
+        if (!canceled) {
+          setEstados(result.data);
+        }
+      } catch (error) {
+        if (!canceled) {
+          setEstados([]);
+          setLocalidadesError(error instanceof Error ? error.message : "Falha ao carregar estados.");
+        }
+      } finally {
+        if (!canceled) {
+          setLoadingEstados(false);
+        }
+      }
+    };
+
+    void loadEstados();
+
+    return () => {
+      canceled = true;
+    };
   }, []);
 
   // carrega cidades quando estado muda
   useEffect(() => {
-    if (!filtros.estado) { setCidades([]); return; }
-    setLoadingCidades(true);
-    void carregarCidadesPorUf(filtros.estado).then((result) => {
-      setCidades(result.ok && result.data ? result.data : []);
-      setLoadingCidades(false);
-    });
+    if (!filtros.estado) {
+      setCidades([]);
+      return;
+    }
+
+    let canceled = false;
+
+    const loadCidades = async () => {
+      setLoadingCidades(true);
+      setLocalidadesError(null);
+
+      try {
+        const result = await carregarCidadesPorUf(filtros.estado);
+        if (!result.ok || !result.data) {
+          throw new Error(result.message || "Falha ao carregar cidades.");
+        }
+
+        if (!canceled) {
+          setCidades(result.data);
+        }
+      } catch (error) {
+        if (!canceled) {
+          setCidades([]);
+          setLocalidadesError(error instanceof Error ? error.message : "Falha ao carregar cidades.");
+        }
+      } finally {
+        if (!canceled) {
+          setLoadingCidades(false);
+        }
+      }
+    };
+
+    void loadCidades();
+
+    return () => {
+      canceled = true;
+    };
   }, [filtros.estado]);
 
   // ── carga do resumo ───────────────────────────────────────────────────────
@@ -472,7 +534,12 @@ export function DashboardVoto({ loggedUser }: DashboardVotoProps) {
 
           {/* linha 2: filtros */}
           {selectedPesquisaId ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+            <>
+              {localidadesError ? (
+                <Alert type="warning">{localidadesError}</Alert>
+              ) : null}
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
               {/* estado — select IBGE */}
               <label className="flex flex-col gap-1 text-sm text-slate-300">
                 <span>Estado</span>
@@ -480,8 +547,9 @@ export function DashboardVoto({ loggedUser }: DashboardVotoProps) {
                   value={filtros.estado}
                   onChange={(e) => patchFiltros({ estado: e.target.value, cidade: "" })}
                   className="h-10 rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
+                  disabled={loadingEstados}
                 >
-                  <option value="">Todos</option>
+                  <option value="">{loadingEstados ? "Carregando..." : "Todos"}</option>
                   {estados.map((e) => (
                     <option key={e.sigla} value={e.sigla}>{e.sigla} — {e.nome}</option>
                   ))}
@@ -495,7 +563,7 @@ export function DashboardVoto({ loggedUser }: DashboardVotoProps) {
                   value={filtros.cidade}
                   onChange={(e) => patchFiltros({ cidade: e.target.value })}
                   className="h-10 rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                  disabled={!filtros.estado || loadingCidades}
+                  disabled={!filtros.estado || loadingCidades || loadingEstados}
                 >
                   <option value="">{loadingCidades ? "Carregando..." : "Todas"}</option>
                   {cidades.map((c) => (
@@ -557,7 +625,8 @@ export function DashboardVoto({ loggedUser }: DashboardVotoProps) {
                   className="h-10 rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100 placeholder:text-slate-500"
                 />
               </label>
-            </div>
+              </div>
+            </>
           ) : null}
         </div>
 
@@ -579,17 +648,8 @@ export function DashboardVoto({ loggedUser }: DashboardVotoProps) {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <MetricCardVoto label={totalVotosLabel} value={String(totalVotosCard)} />
                 <MetricCardVoto label="Candidatos" value={String(totalCandidatosCard)} />
-                {canSeeQueue ? (
-                  <>
-                    <MetricCardVoto label="Fila pendente" value={String(fila.pendentes)} />
-                    <MetricCardVoto label="Fila processada" value={String(fila.processadas)} />
-                  </>
-                ) : (
-                  <>
-                    <MetricCardVoto label="Tempo real" value={isConnected ? "Online" : "Offline"} />
-                    <MetricCardVoto label="Votos na página" value={String(votos.length)} />
-                  </>
-                )}
+                <MetricCardVoto label="Tempo real" value={isConnected ? "Online" : "Offline"} />
+                <MetricCardVoto label="Votos na página" value={String(votos.length)} />
               </div>
             ) : null}
 

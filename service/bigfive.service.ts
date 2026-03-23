@@ -1,5 +1,16 @@
 import { externalApiRequest, externalApiRequestWithMeta, readExternalApiErrorMessage } from "@/service/api";
 
+export type CanalBigFive = "WHATSAPP" | "TELEFONE" | "PRESENCIAL" | "OUTRO";
+
+export type BigFiveCamposExtrasPayload = {
+  canal?: CanalBigFive;
+  idade?: number;
+  telefone?: string;
+  estado?: string;
+  cidade?: string;
+  bairro?: string;
+};
+
 export type QuestionarioBigFive = {
   id: string;
   titulo: string;
@@ -36,7 +47,7 @@ export type AvaliarBigFivePayload = {
   neuro1: number;
   neuro2: number;
   neuro3: number;
-};
+} & BigFiveCamposExtrasPayload;
 
 export type AvaliarBigFivePublicoPayload = Omit<AvaliarBigFivePayload, "participanteId"> & {
   telefone: string;

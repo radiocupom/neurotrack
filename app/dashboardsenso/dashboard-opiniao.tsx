@@ -70,22 +70,84 @@ export function DashboardOpiniao({ loggedUser }: DashboardOpiniaoProps) {
   // ── localidades (IBGE) ───────────────────────────────────────────────────
   const [estados, setEstados] = useState<EstadoOption[]>([]);
   const [cidades, setCidades] = useState<CidadeOption[]>([]);
+  const [loadingEstados, setLoadingEstados] = useState(false);
   const [loadingCidades, setLoadingCidades] = useState(false);
+  const [localidadesError, setLocalidadesError] = useState<string | null>(null);
 
   useEffect(() => {
-    void carregarEstadosBrasileiros().then((result) => {
-      if (result.ok && result.data) setEstados(result.data);
-    });
+    let canceled = false;
+
+    const loadEstados = async () => {
+      setLoadingEstados(true);
+      setLocalidadesError(null);
+
+      try {
+        const result = await carregarEstadosBrasileiros();
+        if (!result.ok || !result.data) {
+          throw new Error(result.message || "Falha ao carregar estados.");
+        }
+
+        if (!canceled) {
+          setEstados(result.data);
+        }
+      } catch (error) {
+        if (!canceled) {
+          setEstados([]);
+          setLocalidadesError(error instanceof Error ? error.message : "Falha ao carregar estados.");
+        }
+      } finally {
+        if (!canceled) {
+          setLoadingEstados(false);
+        }
+      }
+    };
+
+    void loadEstados();
+
+    return () => {
+      canceled = true;
+    };
   }, []);
 
   useEffect(() => {
-    const estadoAtual = String(opiniaoFilters.estado ?? "");
-    if (!estadoAtual) { setCidades([]); return; }
-    setLoadingCidades(true);
-    void carregarCidadesPorUf(estadoAtual).then((result) => {
-      setCidades(result.ok && result.data ? result.data : []);
-      setLoadingCidades(false);
-    });
+    const estadoAtual = String(opiniaoFilters.estado ?? "").trim();
+    if (!estadoAtual) {
+      setCidades([]);
+      return;
+    }
+
+    let canceled = false;
+
+    const loadCidades = async () => {
+      setLoadingCidades(true);
+      setLocalidadesError(null);
+
+      try {
+        const result = await carregarCidadesPorUf(estadoAtual);
+        if (!result.ok || !result.data) {
+          throw new Error(result.message || "Falha ao carregar cidades.");
+        }
+
+        if (!canceled) {
+          setCidades(result.data);
+        }
+      } catch (error) {
+        if (!canceled) {
+          setCidades([]);
+          setLocalidadesError(error instanceof Error ? error.message : "Falha ao carregar cidades.");
+        }
+      } finally {
+        if (!canceled) {
+          setLoadingCidades(false);
+        }
+      }
+    };
+
+    void loadCidades();
+
+    return () => {
+      canceled = true;
+    };
   }, [opiniaoFilters.estado]);
 
   const { isConnected } = useDashboardRealtime({
@@ -265,6 +327,12 @@ export function DashboardOpiniao({ loggedUser }: DashboardOpiniaoProps) {
               </span>
             </div>
 
+            {localidadesError ? (
+              <p className="mb-3 rounded-lg border border-amber-300/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+                {localidadesError}
+              </p>
+            ) : null}
+
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
               <label className="block text-sm text-slate-300 lg:col-span-2">
                 <span className="mb-1 block">Pesquisa</span>
@@ -286,8 +354,9 @@ export function DashboardOpiniao({ loggedUser }: DashboardOpiniaoProps) {
                   value={String(opiniaoFilters.estado ?? "")}
                   onChange={(event) => patchFilters("opiniao", { estado: event.target.value, cidade: "", offset: 0 })}
                   className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
+                  disabled={loadingEstados}
                 >
-                  <option value="">Todos</option>
+                  <option value="">{loadingEstados ? "Carregando..." : "Todos"}</option>
                   {estados.map((e) => (
                     <option key={e.sigla} value={e.sigla}>{e.sigla} — {e.nome}</option>
                   ))}
@@ -300,7 +369,7 @@ export function DashboardOpiniao({ loggedUser }: DashboardOpiniaoProps) {
                   value={String(opiniaoFilters.cidade ?? "")}
                   onChange={(event) => patchFilters("opiniao", { cidade: event.target.value, offset: 0 })}
                   className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                  disabled={!opiniaoFilters.estado || loadingCidades}
+                  disabled={!opiniaoFilters.estado || loadingCidades || loadingEstados}
                 >
                   <option value="">{loadingCidades ? "Carregando..." : "Todas"}</option>
                   {cidades.map((c) => (
@@ -356,36 +425,6 @@ export function DashboardOpiniao({ loggedUser }: DashboardOpiniaoProps) {
                   value={String(opiniaoFilters.respondidoAte ?? "")}
                   onChange={(event) => patchFilters("opiniao", { respondidoAte: event.target.value, offset: 0 })}
                   className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                />
-              </label>
-
-              <label className="block text-sm text-slate-300">
-                <span className="mb-1 block">IP</span>
-                <input
-                  value={String(opiniaoFilters.ip ?? "")}
-                  onChange={(event) => patchFilters("opiniao", { ip: event.target.value, offset: 0 })}
-                  className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                  placeholder="192.168.1.1"
-                />
-              </label>
-
-              <label className="block text-sm text-slate-300">
-                <span className="mb-1 block">Entrevistador ID</span>
-                <input
-                  value={String(opiniaoFilters.entrevistadorId ?? "")}
-                  onChange={(event) => patchFilters("opiniao", { entrevistadorId: event.target.value, offset: 0 })}
-                  className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                  placeholder="UUID ou lista por virgula"
-                />
-              </label>
-
-              <label className="block text-sm text-slate-300">
-                <span className="mb-1 block">Participante ID</span>
-                <input
-                  value={String(opiniaoFilters.participanteId ?? "")}
-                  onChange={(event) => patchFilters("opiniao", { participanteId: event.target.value, offset: 0 })}
-                  className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
-                  placeholder="UUID do participante"
                 />
               </label>
 

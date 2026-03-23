@@ -97,9 +97,9 @@ const NAV_SECTIONS: NavSection[] = [
     id: "whatsapp",
     label: "WhatsApp",
     icon: MessageCircle,
-    roles: ALL_ROLES,
+    roles: ADMIN_ROLES,
     items: [
-      { id: "whatsapp-abrir", label: "Abrir WhatsApp", icon: Smartphone, roles: ALL_ROLES },
+      { id: "whatsapp-abrir", label: "Abrir WhatsApp", icon: Smartphone, roles: ADMIN_ROLES },
     ],
   },
   {
@@ -108,7 +108,7 @@ const NAV_SECTIONS: NavSection[] = [
     icon: LayoutDashboard,
     roles: ALL_ROLES,
     items: [
-      { id: "dashboard-senso", label: "Senso + Big Five", icon: Brain, roles: ALL_ROLES },
+      { id: "dashboard-senso", label: "Senso + Big Five", icon: Brain, roles: ADMIN_ROLES },
       { id: "dashboard-opiniao", label: "Pesquisa de Opinião", icon: PieChart, roles: ADMIN_ROLES },
       { id: "dashboard-voto", label: "Pesquisa de Voto", icon: BarChart3, roles: ADMIN_ROLES },
       {
