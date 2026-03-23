@@ -19,7 +19,7 @@ function getSocketUrl() {
     ?? ""
   ).trim();
 
-  if (!raw) return "http://localhost:3003";
+  if (!raw) return "https://api.neurotrack.site";
   return raw.endsWith("/") ? raw.slice(0, -1) : raw;
 }
 
