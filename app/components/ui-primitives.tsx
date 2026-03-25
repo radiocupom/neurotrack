@@ -228,6 +228,58 @@ interface AlertProps {
   className?: string;
 }
 
+interface ToggleProps {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+  description?: string;
+  disabled?: boolean;
+  className?: string;
+}
+
+export function Toggle({
+  checked,
+  onChange,
+  label,
+  description,
+  disabled = false,
+  className = "",
+}: ToggleProps) {
+  return (
+    <div className={cn("flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3", className)}>
+      <div>
+        <p className="text-sm font-medium text-slate-100">{label}</p>
+        {description ? <p className="mt-1 text-sm text-slate-400">{description}</p> : null}
+      </div>
+
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={cn(
+          "relative inline-flex h-8 w-14 shrink-0 items-center rounded-full border transition disabled:cursor-not-allowed disabled:opacity-50",
+          checked
+            ? "border-emerald-300/40 bg-emerald-400/20"
+            : "border-white/15 bg-slate-900/80",
+        )}
+      >
+        <span
+          className={cn(
+            "absolute left-1 flex size-6 items-center justify-center rounded-full text-[10px] font-black transition-transform",
+            checked
+              ? "translate-x-6 bg-emerald-300 text-slate-950"
+              : "translate-x-0 bg-slate-300 text-slate-950",
+          )}
+        >
+          {checked ? "ON" : "OFF"}
+        </span>
+      </button>
+    </div>
+  );
+}
+
 export function Alert({
   children,
   type = "info",

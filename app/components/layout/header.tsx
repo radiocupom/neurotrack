@@ -26,6 +26,7 @@ export function Header() {
     login,
     logout,
   } = useAuth();
+  const homeHref = user ? "/areashow" : "/";
 
   const syncLoginFromQuery = useEffectEvent((redirectTo: string) => {
     openLoginModal(redirectTo);
@@ -50,7 +51,7 @@ export function Header() {
     <>
       <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/70 backdrop-blur-xl">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-6 py-4 sm:px-10">
-          <Link href="/" className="group flex items-center gap-3">
+          <Link href={homeHref} className="group flex items-center gap-3">
             <span className="flex size-11 items-center justify-center rounded-2xl border border-cyan-400/30 bg-cyan-400/10 text-cyan-300 shadow-lg shadow-cyan-950/30 transition group-hover:scale-105 group-hover:border-cyan-300/60">
               <Brain className="size-5" />
             </span>

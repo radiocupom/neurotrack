@@ -97,7 +97,7 @@ export function IntencaoVotoPublicoClient({ pesquisaId }: { pesquisaId: string }
                 ) : (
                   <div className="space-y-4">
                     <ParticipanteInfo participante={participante} onMudar={limpar} />
-                    <Alert type="info">Participante validado. O envio do voto continua bloqueado caso ele nao exista previamente na base.</Alert>
+                    <Alert type="info">Participante validado. Se o telefone nao existia, o backend realiza autocadastro e segue com o voto.</Alert>
                     <Button onClick={() => setPasso("localizacao")} fullWidth>
                       Continuar
                     </Button>

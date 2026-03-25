@@ -51,6 +51,8 @@ export type AvaliarBigFivePayload = {
 
 export type AvaliarBigFivePublicoPayload = Omit<AvaliarBigFivePayload, "participanteId"> & {
   telefone: string;
+  nome?: string;
+  email?: string;
 };
 
 export function avaliarBigFiveFromExternalApi(token: string, payload: AvaliarBigFivePayload) {
@@ -73,7 +75,7 @@ export function obterResultadoBigFiveFromExternalApi(token: string, participante
 }
 
 export function avaliarBigFivePublicoFromExternalApi(payload: AvaliarBigFivePublicoPayload) {
-  return externalApiRequest<Record<string, unknown>>("/bigfive/avaliar-publico", {
+  return externalApiRequestWithMeta<Record<string, unknown>>("/bigfive/avaliar-publico", {
     method: "POST",
     body: payload,
   });

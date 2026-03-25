@@ -49,7 +49,7 @@ type ContratoCriarPesquisaPayload = {
 type ContratoAtualizarPesquisaPayload = {
   titulo?: string;
   descricao?: string;
-  ativa?: boolean;
+  ativo?: boolean;
   perguntas?: {
     create?: ContratoPerguntaCreate[];
   };
@@ -73,6 +73,39 @@ function unwrapPayload<T = unknown>(value: unknown): T | null {
   }
 
   return value as T;
+}
+
+function sanitizeOpiniaoPublicUrl(value: string | null, pesquisaId: string) {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.includes("/responder-publico")) {
+    try {
+      const current = new URL(trimmed);
+      const nextPath = `/pesquisa-opiniao/${encodeURIComponent(pesquisaId)}`;
+      return `${current.origin}${nextPath}`;
+    } catch {
+      return `/pesquisa-opiniao/${encodeURIComponent(pesquisaId)}`;
+    }
+  }
+
+  return trimmed;
+}
+
+function buildOpiniaoPublicUrlFallback(pesquisaId: string) {
+  const base = process.env.PUBLIC_WEB_BASE_URL?.trim();
+  const path = `/pesquisa-opiniao/${encodeURIComponent(pesquisaId)}`;
+  if (!base) {
+    return path;
+  }
+
+  return `${base.replace(/\/$/, "")}${path}`;
 }
 
 function normalizePesquisaDetalhe(value: unknown): PesquisaDetalhe | null {
@@ -110,11 +143,26 @@ function normalizePesquisaDetalhe(value: unknown): PesquisaDetalhe | null {
     };
   });
 
+  const pesquisaId = typeof source.id === "string" ? source.id : "";
+  const urlPublicaRaw =
+    typeof source.urlPublica === "string"
+      ? source.urlPublica
+      : typeof source.urlPesquisa === "string"
+        ? source.urlPesquisa
+        : null;
+  const urlPublica = sanitizeOpiniaoPublicUrl(urlPublicaRaw, pesquisaId) || buildOpiniaoPublicUrlFallback(pesquisaId);
+
   return {
-    id: typeof source.id === "string" ? source.id : "",
+    id: pesquisaId,
     titulo: typeof source.titulo === "string" ? source.titulo : "Pesquisa sem titulo",
     descricao: typeof source.descricao === "string" ? source.descricao : null,
-    ativa: typeof source.ativa === "boolean" ? source.ativa : true,
+    ativo:
+      typeof source.ativo === "boolean"
+        ? source.ativo
+        : typeof source.ativa === "boolean"
+          ? source.ativa
+          : true,
+    urlPublica,
     criadoEm: typeof source.criadoEm === "string" ? source.criadoEm : undefined,
     perguntas,
   };
@@ -169,7 +217,7 @@ function normalizarPayloadAtualizacao(payload: AtualizarPesquisaOpiniaoPayload):
   return {
     titulo: payload.titulo?.trim() || undefined,
     descricao: payload.descricao?.trim() || undefined,
-    ativa: payload.ativa,
+    ativo: payload.ativo,
     perguntas: normalizarPerguntasParaContrato(payload.perguntas),
   };
 }
@@ -261,7 +309,7 @@ export async function obterPesquisaPublica(
 ): Promise<ApiResponse<PesquisaDetalhe>> {
   try {
     const data = await externalApiRequest<unknown>(
-      `${MODULE_PATH}/${encodeURIComponent(pesquisaId)}`,
+      `${MODULE_PATH}/publica/${encodeURIComponent(pesquisaId)}`,
       {
         method: "GET",
       },

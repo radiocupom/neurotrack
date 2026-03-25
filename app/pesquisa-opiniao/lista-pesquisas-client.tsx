@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Alert, Button, Card, Loading } from "@/app/components/ui-primitives";
 import { usePesquisasOpiniao } from "@/lib/hooks/use-pesquisas-opiniao";
@@ -29,11 +29,7 @@ function CopiarLink({ url }: { url: string }) {
 
 export function ListaPesquisasClient() {
   const { pesquisas, loading, error, refetch } = usePesquisasOpiniao({ autoload: true });
-  const [baseUrl, setBaseUrl] = useState("");
-
-  useEffect(() => {
-    setBaseUrl(window.location.origin);
-  }, []);
+  const pesquisasAtivas = pesquisas.filter((pesquisa) => pesquisa.ativo !== false);
 
   return (
     <section className="flex flex-1 min-w-0 flex-col p-3 sm:p-6 lg:p-8">
@@ -54,36 +50,28 @@ export function ListaPesquisasClient() {
 
         {loading && <Loading message="Carregando pesquisas..." />}
 
-        {!loading && pesquisas.length === 0 && (
+        {!loading && pesquisasAtivas.length === 0 && (
           <Alert type="info">Nenhuma pesquisa disponivel no momento.</Alert>
         )}
 
-        {!loading && pesquisas.length > 0 && (
+        {!loading && pesquisasAtivas.length > 0 && (
           <div className="grid gap-4">
-            {pesquisas.map((pesquisa) => {
-              const urlPublica = baseUrl
-                ? `${baseUrl}/pesquisa-opiniao/${pesquisa.id}/responder-publico`
-                : `/pesquisa-opiniao/${pesquisa.id}/responder-publico`;
+            {pesquisasAtivas.map((pesquisa) => {
+              const urlPublica = pesquisa.urlPublica?.trim() || "";
               return (
                 <Card key={pesquisa.id} className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-lg font-semibold text-slate-100">{pesquisa.titulo}</h2>
-                      {pesquisa.ativa !== false ? (
-                        <span className="rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-200">
-                          Ativa
-                        </span>
-                      ) : (
-                        <span className="rounded-full border border-amber-300/30 bg-amber-400/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-200">
-                          Inativa
-                        </span>
-                      )}
+                      <span className="rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-200">
+                        Ativa
+                      </span>
                     </div>
                     {pesquisa.descricao ? <p className="mt-2 text-sm text-slate-300">{pesquisa.descricao}</p> : null}
                     <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-400">
                       <span>{pesquisa.perguntas.length} pergunta(s)</span>
-                      <span className="font-mono">{urlPublica}</span>
-                      {baseUrl ? <CopiarLink url={urlPublica} /> : null}
+                      <span className="font-mono">{urlPublica || "URL publica indisponivel"}</span>
+                      {urlPublica ? <CopiarLink url={urlPublica} /> : null}
                     </div>
                   </div>
 
@@ -91,9 +79,11 @@ export function ListaPesquisasClient() {
                     <Link href={`/pesquisa-opiniao/responder?pesquisaId=${pesquisa.id}`}>
                       <Button variant="primary">Responder</Button>
                     </Link>
-                    <Link href={`/pesquisa-opiniao/${pesquisa.id}/responder-publico`}>
-                      <Button variant="secondary">Tela publica</Button>
-                    </Link>
+                    {urlPublica ? (
+                      <a href={urlPublica} target="_blank" rel="noopener noreferrer">
+                        <Button variant="secondary">Tela publica</Button>
+                      </a>
+                    ) : null}
                   </div>
                 </Card>
               );

@@ -65,8 +65,8 @@ const NAV_SECTIONS: NavSection[] = [
     icon: Brain,
     roles: ALL_ROLES,
     items: [
-      { id: "senso-criar-campanha", label: "Criar campanha", icon: Plus, roles: ADMIN_ROLES },
       { id: "senso-aplicar", label: "Aplicar pesquisa", icon: ClipboardCheck, roles: ALL_ROLES },
+      { id: "senso-gerenciar-campanhas", label: "Gerenciar campanhas", icon: Plus, roles: ADMIN_ROLES },
     ],
   },
   {
@@ -100,6 +100,15 @@ const NAV_SECTIONS: NavSection[] = [
     roles: ADMIN_ROLES,
     items: [
       { id: "whatsapp-abrir", label: "Abrir WhatsApp", icon: Smartphone, roles: ADMIN_ROLES },
+    ],
+  },
+  {
+    id: "participantes",
+    label: "Participantes",
+    icon: Users,
+    roles: ADMIN_ROLES,
+    items: [
+      { id: "participantes-listar", label: "Participantes + Pesquisas", icon: List, roles: ADMIN_ROLES },
     ],
   },
   {
@@ -203,7 +212,14 @@ export function Sidebar({ userRole, activeView, onViewChange }: SidebarProps) {
           collapsed && "justify-center px-2",
         )}
       >
-        <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            onViewChange("");
+            setMobileOpen(false);
+          }}
+          className="flex items-center gap-3 text-left transition hover:opacity-90"
+        >
           <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-cyan-400/10 text-cyan-300">
             <CircleUser className="size-4" />
           </span>
@@ -215,7 +231,7 @@ export function Sidebar({ userRole, activeView, onViewChange }: SidebarProps) {
               <p className="text-[10px] text-slate-500">Senso</p>
             </div>
           )}
-        </div>
+        </button>
 
         <button
           type="button"

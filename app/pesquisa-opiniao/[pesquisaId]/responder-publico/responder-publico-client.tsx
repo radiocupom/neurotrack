@@ -26,7 +26,7 @@ export function ResponderPesquisaPublicoClient({ pesquisaId }: { pesquisaId: str
   const [localizacao, setLocalizacao] = useState<{ estado: string; cidade: string; bairro: string } | null>(null);
   const [respostas, setRespostas] = useState<Record<string, string>>({});
   const [errosValidacao, setErrosValidacao] = useState<Record<string, string>>({});
-  const [canal, setCanal] = useState<"WHATSAPP" | "TELEFONE" | "PRESENCIAL" | "OUTRO">("PRESENCIAL");
+  const [canal, setCanal] = useState<"WHATSAPP" | "TELEFONE" | "PRESENCIAL" | "OUTRO">("WHATSAPP");
   const [idade, setIdade] = useState("");
   const [telefoneContato, setTelefoneContato] = useState("");
 
@@ -99,7 +99,7 @@ export function ResponderPesquisaPublicoClient({ pesquisaId }: { pesquisaId: str
     setLocalizacao(null);
     setRespostas({});
     setErrosValidacao({});
-    setCanal("PRESENCIAL");
+    setCanal("WHATSAPP");
     setIdade("");
     setTelefoneContato("");
     limpar();

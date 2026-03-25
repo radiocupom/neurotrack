@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEURO_TRACK_API_URL ?? "https://api.neurotrack.site/api";
+const API_BASE_URL = process.env.NEURO_API_URL;
 const PRIVATE_API_TOKEN = process.env.PRIVATE_API_TOKEN ?? "";
 
 type Primitive = string | number | boolean;

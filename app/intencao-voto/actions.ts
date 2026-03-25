@@ -7,6 +7,7 @@ import {
   buscarParticipanteIntencaoDeVotoPorTelefone,
   criarParticipanteIntencaoDeVoto,
 } from "@/service/intencaoDeVoto.service";
+import { identificarParticipanteFromExternalApi } from "@/service/participantes.service";
 import type { ApiResponse, ParticipanteIntencaoVoto } from "@/types/intencao-voto";
 
 function readObject(value: unknown): Record<string, unknown> | null {
@@ -185,12 +186,39 @@ export async function buscarOuCriarParticipanteIntencaoVotoPrivadoAction(
 }
 
 export async function identificarParticipanteIntencaoVotoPublicoAction(
-  telefone: string,
+  payload: { telefone: string; nome?: string; email?: string },
 ): Promise<ApiResponse<ParticipanteIntencaoVoto>> {
-  const contato = telefone.trim();
+  const contato = payload.telefone.trim();
+  const nome = payload.nome?.trim();
+  const email = payload.email?.trim();
+
   if (!contato) {
     return { ok: false, status: 400, data: null, message: "Informe o telefone do participante." };
   }
 
-  return buscarParticipanteIntencaoDeVotoPorTelefone(contato);
+  if (!nome) {
+    return { ok: false, status: 400, data: null, message: "Informe o nome do participante." };
+  }
+
+  try {
+    const data = await identificarParticipanteFromExternalApi({
+      telefone: contato,
+      nome,
+      email: email || undefined,
+    });
+
+    const participante = normalizeParticipantResult(data);
+    if (!participante) {
+      return {
+        ok: false,
+        status: 502,
+        data: null,
+        message: "Nao foi possivel validar o participante retornado.",
+      };
+    }
+
+    return { ok: true, status: 200, data: participante, message: "Participante identificado." };
+  } catch {
+    return buscarParticipanteIntencaoDeVotoPorTelefone(contato);
+  }
 }

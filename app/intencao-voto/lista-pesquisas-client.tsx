@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Alert, Button, Card, Loading } from "@/app/components/ui-primitives";
 import { usePesquisasIntencaoVoto } from "@/lib/hooks/use-pesquisas-intencao-voto";
@@ -29,11 +29,7 @@ function CopiarLink({ url }: { url: string }) {
 
 export function ListaPesquisasIntencaoVotoClient() {
   const { pesquisas, loading, error, refetch } = usePesquisasIntencaoVoto({ autoload: true });
-  const [baseUrl, setBaseUrl] = useState("");
-
-  useEffect(() => {
-    setBaseUrl(window.location.origin);
-  }, []);
+  const pesquisasAtivas = pesquisas.filter((pesquisa) => pesquisa.ativo !== false);
 
   return (
     <section className="flex min-w-0 flex-1 flex-col p-3 sm:p-6 lg:p-8">
@@ -48,35 +44,27 @@ export function ListaPesquisasIntencaoVotoClient() {
 
         {error ? <Alert type="error" className="mb-4">{error}</Alert> : null}
         {loading ? <Loading message="Carregando pesquisas..." /> : null}
-        {!loading && pesquisas.length === 0 ? <Alert type="info">Nenhuma pesquisa disponivel no momento.</Alert> : null}
+        {!loading && pesquisasAtivas.length === 0 ? <Alert type="info">Nenhuma pesquisa disponivel no momento.</Alert> : null}
 
-        {!loading && pesquisas.length > 0 ? (
+        {!loading && pesquisasAtivas.length > 0 ? (
           <div className="grid gap-4">
-            {pesquisas.map((pesquisa) => {
-              const urlPublica = baseUrl
-                ? `${baseUrl}/intencao-voto/${pesquisa.id}`
-                : `/intencao-voto/${pesquisa.id}`;
+            {pesquisasAtivas.map((pesquisa) => {
+              const urlPublica = pesquisa.urlPublica?.trim() || pesquisa.urlPesquisa?.trim() || "";
               return (
                 <Card key={pesquisa.id} className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-lg font-semibold text-slate-100">{pesquisa.titulo}</h2>
-                      {pesquisa.ativo !== false ? (
-                        <span className="rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-200">
-                          Ativa
-                        </span>
-                      ) : (
-                        <span className="rounded-full border border-amber-300/30 bg-amber-400/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-200">
-                          Inativa
-                        </span>
-                      )}
+                      <span className="rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-200">
+                        Ativa
+                      </span>
                     </div>
                     {pesquisa.descricao ? <p className="mt-2 text-sm text-slate-300">{pesquisa.descricao}</p> : null}
                     <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-400">
                       <span>{pesquisa.cargo}</span>
                       <span>{pesquisa.candidatos.length} candidato(s)</span>
-                      <span className="font-mono">{urlPublica}</span>
-                      {baseUrl ? <CopiarLink url={urlPublica} /> : null}
+                      <span className="font-mono">{urlPublica || "URL publica indisponivel"}</span>
+                      {urlPublica ? <CopiarLink url={urlPublica} /> : null}
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
                       {pesquisa.candidatos.slice(0, 4).map((candidato) => (
@@ -91,9 +79,11 @@ export function ListaPesquisasIntencaoVotoClient() {
                     <Link href={`/intencao-voto/responder?pesquisaId=${pesquisa.id}`}>
                       <Button>Responder</Button>
                     </Link>
-                    <Link href={`/intencao-voto/${pesquisa.id}`}>
-                      <Button variant="secondary">Tela publica</Button>
-                    </Link>
+                    {urlPublica ? (
+                      <a href={urlPublica} target="_blank" rel="noopener noreferrer">
+                        <Button variant="secondary">Tela publica</Button>
+                      </a>
+                    ) : null}
                   </div>
                 </Card>
               );

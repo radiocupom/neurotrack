@@ -459,8 +459,8 @@ export function FormularioParticipantePublico({
           placeholder="Seu nome completo"
           value={nome}
           onChange={(e) => setNome(e.target.value)}
-          required
           disabled={disabled || loading}
+          helpText="Opcional, mas recomendado para autocadastro"
         />
 
         <Input
@@ -476,7 +476,7 @@ export function FormularioParticipantePublico({
           type="submit"
           loading={loading}
           fullWidth
-          disabled={disabled || !telefone || !nome || telefone.length !== 11}
+          disabled={disabled || !telefone || telefone.length !== 11}
         >
           {loading ? "Identificando..." : "Continuar"}
         </Button>
@@ -492,6 +492,7 @@ export function FormularioParticipantePublico({
 interface ResumoPesquisaProps {
   titulo: string;
   descricao?: string | null;
+  urlPublica?: string | null;
   totalPerguntas: number;
   totalRespostas: number;
 }
@@ -499,6 +500,7 @@ interface ResumoPesquisaProps {
 export function ResumoPesquisa({
   titulo,
   descricao,
+  urlPublica,
   totalPerguntas,
   totalRespostas,
 }: ResumoPesquisaProps) {
@@ -506,6 +508,9 @@ export function ResumoPesquisa({
     <Card className="mb-6 border-cyan-400/30 bg-cyan-400/10">
       <h2 className="mb-2 text-2xl font-bold text-slate-100">{titulo}</h2>
       {descricao && <p className="mb-4 text-slate-300">{descricao}</p>}
+      <p className="mb-2 text-xs text-slate-300">
+        URL publica: <span className="font-semibold text-cyan-200">{urlPublica || "URL publica indisponivel"}</span>
+      </p>
       <p className="text-sm text-slate-300">
         <span className="font-semibold">{totalPerguntas}</span> perguntas •{" "}
         <span className="font-semibold">{totalRespostas}</span> respondidas

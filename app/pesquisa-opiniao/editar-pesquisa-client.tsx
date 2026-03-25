@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { Alert, Button, Card, Input, Select } from "@/app/components/ui-primitives";
+import { Alert, Button, Card, Input, Select, Toggle } from "@/app/components/ui-primitives";
 import {
   atualizarPesquisaOpiniao,
   excluirPesquisaOpiniao,
@@ -12,24 +12,73 @@ import {
 import type { PesquisaDetalhe, PesquisaOpiniao } from "@/types/pesquisa-opiniao";
 
 type OpcaoDraft = {
+  id?: string;
   texto: string;
 };
 
 type PerguntaDraft = {
+  id?: string;
   texto: string;
   obrigatoria: boolean;
   opcoes: OpcaoDraft[];
+};
+
+type PesquisaDraft = {
+  titulo: string;
+  descricao: string;
+  ativo: boolean;
+  perguntas: PerguntaDraft[];
 };
 
 function toDraft(pesquisa: PesquisaDetalhe) {
   return {
     titulo: pesquisa.titulo,
     descricao: pesquisa.descricao ?? "",
-    ativa: pesquisa.ativa !== false,
+    ativo: pesquisa.ativo !== false,
     perguntas: pesquisa.perguntas.map((pergunta) => ({
+      id: pergunta.id,
       texto: pergunta.texto,
       obrigatoria: pergunta.obrigatoria !== false,
-      opcoes: pergunta.opcoes.map((opcao) => ({ texto: opcao.texto })),
+      opcoes: pergunta.opcoes.map((opcao) => ({ id: opcao.id, texto: opcao.texto })),
+    })),
+  };
+}
+
+function normalizePerguntasForCompare(perguntas: PerguntaDraft[]) {
+  return perguntas.map((pergunta, perguntaIndex) => ({
+    id: pergunta.id?.trim() || "",
+    texto: pergunta.texto.trim(),
+    obrigatoria: pergunta.obrigatoria !== false,
+    ordem: perguntaIndex + 1,
+    opcoes: pergunta.opcoes
+      .filter((opcao) => Boolean(opcao.texto.trim()))
+      .map((opcao, opcaoIndex) => ({
+        id: opcao.id?.trim() || "",
+        texto: opcao.texto.trim(),
+        ordem: opcaoIndex + 1,
+      })),
+  }));
+}
+
+function perguntasMudaram(atual: PerguntaDraft[], inicial: PerguntaDraft[]) {
+  const perguntasAtuais = normalizePerguntasForCompare(atual);
+  const perguntasIniciais = normalizePerguntasForCompare(inicial);
+
+  return JSON.stringify(perguntasAtuais) !== JSON.stringify(perguntasIniciais);
+}
+
+function buildPerguntasPayload(perguntas: PerguntaDraft[]) {
+  return {
+    create: perguntas.map((pergunta, perguntaIndex) => ({
+      texto: pergunta.texto.trim(),
+      ordem: perguntaIndex + 1,
+      obrigatoria: pergunta.obrigatoria,
+      opcoes: pergunta.opcoes
+        .filter((opcao) => opcao.texto.trim())
+        .map((opcao, opcaoIndex) => ({
+          texto: opcao.texto.trim(),
+          ordem: opcaoIndex + 1,
+        })),
     })),
   };
 }
@@ -43,8 +92,9 @@ export function EditarPesquisaClient() {
 
   const [titulo, setTitulo] = useState("");
   const [descricao, setDescricao] = useState("");
-  const [ativa, setAtiva] = useState(true);
+  const [ativo, setAtivo] = useState(true);
   const [perguntas, setPerguntas] = useState<PerguntaDraft[]>([]);
+  const [draftInicial, setDraftInicial] = useState<PesquisaDraft | null>(null);
 
   const [erro, setErro] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState<string | null>(null);
@@ -82,8 +132,18 @@ export function EditarPesquisaClient() {
     const draft = toDraft(result.data);
     setTitulo(draft.titulo);
     setDescricao(draft.descricao);
-    setAtiva(draft.ativa);
+    setAtivo(draft.ativo);
     setPerguntas(draft.perguntas);
+    setDraftInicial(draft);
+  }
+
+  function limparFormulario() {
+    setPesquisaId("");
+    setTitulo("");
+    setDescricao("");
+    setAtivo(true);
+    setPerguntas([]);
+    setDraftInicial(null);
   }
 
   useEffect(() => {
@@ -167,23 +227,17 @@ export function EditarPesquisaClient() {
     }
 
     setLoadingSave(true);
-    const result = await atualizarPesquisaOpiniao(pesquisaId, {
+    const payload = {
       titulo: titulo.trim(),
       descricao: descricao.trim() || undefined,
-      ativa,
-      perguntas: {
-        create: perguntas.map((pergunta, perguntaIndex) => ({
-          texto: pergunta.texto.trim(),
-          ordem: perguntaIndex + 1,
-          obrigatoria: pergunta.obrigatoria,
-          opcoes: pergunta.opcoes
-            .filter((opcao) => opcao.texto.trim())
-            .map((opcao, opcaoIndex) => ({
-              texto: opcao.texto.trim(),
-              ordem: opcaoIndex + 1,
-            })),
-        })),
-      },
+      ativo,
+      ...(perguntasMudaram(perguntas, draftInicial?.perguntas ?? [])
+        ? { perguntas: buildPerguntasPayload(perguntas) }
+        : {}),
+    };
+
+    const result = await atualizarPesquisaOpiniao(pesquisaId, {
+      ...payload,
     });
     setLoadingSave(false);
 
@@ -192,7 +246,28 @@ export function EditarPesquisaClient() {
       return;
     }
 
-    setSucesso("Pesquisa atualizada com sucesso.");
+    if (ativo === false) {
+      setSucesso("Pesquisa desativada com sucesso. Ela nao aparece mais na listagem de pesquisas ativas.");
+      limparFormulario();
+    } else {
+      setSucesso("Pesquisa atualizada com sucesso.");
+      if (result.data) {
+        const draftAtualizado = toDraft(result.data);
+        setTitulo(draftAtualizado.titulo);
+        setDescricao(draftAtualizado.descricao);
+        setAtivo(draftAtualizado.ativo);
+        setPerguntas(draftAtualizado.perguntas);
+        setDraftInicial(draftAtualizado);
+      } else {
+        setDraftInicial({
+          titulo: payload.titulo,
+          descricao: payload.descricao ?? "",
+          ativo,
+          perguntas,
+        });
+      }
+    }
+
     await carregarPesquisas();
   }
 
@@ -213,11 +288,7 @@ export function EditarPesquisaClient() {
     }
 
     setSucesso("Pesquisa excluida com sucesso.");
-    setPesquisaId("");
-    setTitulo("");
-    setDescricao("");
-    setAtiva(true);
-    setPerguntas([]);
+    limparFormulario();
     await carregarPesquisas();
   }
 
@@ -257,10 +328,13 @@ export function EditarPesquisaClient() {
               <div className="grid gap-3">
                 <Input label="Titulo" value={titulo} onChange={(event) => setTitulo(event.target.value)} required />
                 <Input label="Descricao" value={descricao} onChange={(event) => setDescricao(event.target.value)} />
-                <label className="flex items-center gap-2 text-sm text-slate-300">
-                  <input type="checkbox" checked={ativa} onChange={(event) => setAtiva(event.target.checked)} />
-                  Pesquisa ativa
-                </label>
+                <Toggle
+                  checked={ativo}
+                  onChange={setAtivo}
+                  label="Pesquisa ativa"
+                  description="Quando desativada, a pesquisa deixa de aparecer em listar pesquisas."
+                  disabled={loadingSave}
+                />
               </div>
             </Card>
 

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useReducer, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { CheckCircle2, Plus, Search, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { getBrowserCache, setBrowserCache } from "@/lib/cache/browser-cache";
 import type { AuthUser } from "@/lib/auth/types";
 import {
 	CAMPAIGNS_PERMISSION_MESSAGE,
@@ -22,6 +23,7 @@ import {
 	carregarQuestionariosPrivados,
 	carregarQuestionarioSenso,
 	criarCampanha,
+	atualizarCampanha,
 	criarParticipante,
 	carregarQuestionarioBigFiveAction,
 	enviarBigFive,
@@ -46,7 +48,6 @@ import {
 	type NormalizedJornadaState,
 } from "@/app/sensobigfive/normalize-jornada-state";
 import type { CanalBigFive } from "@/service/bigfive.service";
-import type { PrecheckJornadaPublicaSenso } from "@/service/sensoPopulacional.service";
 
 type Participante = {
 	id?: string;
@@ -60,6 +61,7 @@ type Questionario = {
 	id: string;
 	nome?: string;
 	titulo?: string;
+	urlPublica?: string;
 };
 
 type ScoreKey =
@@ -324,6 +326,26 @@ export type SensoBigFiveWorkflowProps = {
 };
 
 const MANAGER_ROLES = new Set(["SUPERADMIN", "ADMIN"]);
+const CAMPAIGN_CACHE_KEY = "senso-bigfive-campaigns";
+const CAMPAIGN_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
+
+function mergeCampaignCollections(current: WorkflowCampanha[], incoming: WorkflowCampanha[]) {
+	const merged = new Map<string, WorkflowCampanha>();
+
+	for (const item of current) {
+		merged.set(item.id, item);
+	}
+
+	for (const item of incoming) {
+		const previous = merged.get(item.id);
+		merged.set(item.id, {
+			...previous,
+			...item,
+		});
+	}
+
+	return Array.from(merged.values()).sort((first, second) => first.nome.localeCompare(second.nome, "pt-BR"));
+}
 
 export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigFiveWorkflowProps) {
 	const [store, dispatch] = useReducer(jornadaStoreReducer, initialJornadaStoreState);
@@ -335,6 +357,8 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 	const [campanhas, setCampanhas] = useState<WorkflowCampanha[]>([]);
 
 	const [campanhaId, setCampanhaId] = useState("");
+	const [campanhaGestaoId, setCampanhaGestaoId] = useState("");
+	const [manualCampaignId, setManualCampaignId] = useState("");
 	const [estado, setEstado] = useState("SP");
 	const [cidade, setCidade] = useState("");
 	const [bairro, setBairro] = useState("");
@@ -351,7 +375,6 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 
 	const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 	const [createModalOpen, setCreateModalOpen] = useState(false);
-	const [createCampaignModalOpen, setCreateCampaignModalOpen] = useState(false);
 	const [telefoneBusca, setTelefoneBusca] = useState("");
 	const [nomeNovoParticipante, setNomeNovoParticipante] = useState("");
 	const [emailNovoParticipante, setEmailNovoParticipante] = useState("");
@@ -362,6 +385,7 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 	const [loadingBaseData, setLoadingBaseData] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
 	const [creatingCampaign, setCreatingCampaign] = useState(false);
+	const [updatingCampaignStatus, setUpdatingCampaignStatus] = useState(false);
 	const [processingSenso, setProcessingSenso] = useState(false);
 	const [error, setError] = useState("");
 	const [feedback, setFeedback] = useState("");
@@ -379,6 +403,10 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 
 	const canManageCampanhas = MANAGER_ROLES.has(loggedUser.papel);
 	const campanhasAtivas = useMemo(() => campanhas.filter((item) => item.ativo), [campanhas]);
+	const selectedCampanhaGestao = useMemo(
+		() => campanhas.find((item) => item.id === campanhaGestaoId) ?? null,
+		[campanhaGestaoId, campanhas],
+	);
 	const selectedCampanha = useMemo(
 		() => campanhasAtivas.find((item) => item.id === campanhaId) ?? null,
 		[campanhaId, campanhasAtivas],
@@ -391,6 +419,17 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 				: null),
 		[questionarios, selectedCampanha, questionarioBase],
 	);
+	const selectedPesquisaPublicaUrl = useMemo(() => {
+		const candidates = [selectedCampanha?.urlPublica, selectedQuestionario?.urlPublica];
+
+		for (const candidate of candidates) {
+			if (typeof candidate === "string" && candidate.trim()) {
+				return candidate.trim();
+			}
+		}
+
+		return "";
+	}, [selectedCampanha, selectedQuestionario]);
 	const canConfirmParticipant = Boolean(selectedCampanha) && !loadingBaseData && !submitting;
 	const isBigFiveBlocked = step === "bigfive" && jornadaState.podeResponderBigFive === false;
 	const shouldBlockBigFiveSubmit =
@@ -614,7 +653,11 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 		resetParticipantJourney();
 	}
 
-	async function loadBaseData(preferredCampaignId?: string) {
+	const persistCampaigns = useCallback((nextCampaigns: WorkflowCampanha[]) => {
+		setBrowserCache(CAMPAIGN_CACHE_KEY, nextCampaigns, { ttl: CAMPAIGN_CACHE_TTL });
+	}, []);
+
+	const loadBaseData = useCallback(async (preferredCampaignId?: string) => {
 		setLoadingBaseData(true);
 		setError("");
 
@@ -634,28 +677,35 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 			}
 
 			const qs = normalizeList<Questionario>(questionariosResult.data);
-			const cs = normalizeCampanhas(campanhasResult.data).filter((item) => item.ativo);
+			const cs = normalizeCampanhas(campanhasResult.data);
+			const cachedCampaigns = getBrowserCache<WorkflowCampanha[]>(CAMPAIGN_CACHE_KEY) ?? [];
+			const mergedCampaigns = mergeCampaignCollections(cachedCampaigns, cs);
 
 			setQuestionarios(qs);
 			setQuestionarioBase(questionarioPublicoResult.data);
-			setCampanhas(cs);
+			setCampanhas(mergedCampaigns);
+			persistCampaigns(mergedCampaigns);
 			dispatch({ type: "setQuestionarioSensoId", payload: questionarioPublicoResult.data.id });
 
 			setQuestionarioNovaCampanhaId((current) => current || qs[0]?.id || "");
 			setCampanhaId((current) => {
 				const candidate = preferredCampaignId || current;
-				return cs.some((item) => item.id === candidate) ? candidate : "";
+				return mergedCampaigns.some((item) => item.id === candidate && item.ativo) ? candidate : "";
+			});
+			setCampanhaGestaoId((current) => {
+				const candidate = preferredCampaignId || current;
+				return mergedCampaigns.some((item) => item.id === candidate) ? candidate : mergedCampaigns[0]?.id || "";
 			});
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Erro ao carregar dados base.");
 		} finally {
 			setLoadingBaseData(false);
 		}
-	}
+	}, [dispatch, persistCampaigns]);
 
 	useEffect(() => {
 		void loadBaseData();
-	}, []);
+	}, [loadBaseData]);
 
 	useEffect(() => {
 		let canceled = false;
@@ -787,7 +837,7 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 		return () => {
 			canceled = true;
 		};
-	}, [step, bigFiveQuestionario]);
+	}, [step, bigFiveQuestionario, loadingBigFiveQuestionario]);
 
 	useEffect(() => {
 		if (telefoneBigFive.trim()) {
@@ -1156,7 +1206,7 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 				return;
 			}
 
-			const normalized = applyJornadaHydration({
+			applyJornadaHydration({
 				bigFiveResultado: response.data,
 			});
 
@@ -1220,12 +1270,20 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 			await loadBaseData(createdCampaign?.id);
 			if (createdCampaign?.id) {
 				setCampanhaId(createdCampaign.id);
+				setCampanhaGestaoId(createdCampaign.id);
 				dispatch({ type: "setCampanhaSelecionada", payload: createdCampaign.id });
+			}
+
+			if (createdCampaign) {
+				setCampanhas((current) => {
+					const nextCampaigns = mergeCampaignCollections(current, [createdCampaign]);
+					persistCampaigns(nextCampaigns);
+					return nextCampaigns;
+				});
 			}
 
 			setNomeNovaCampanha("");
 			setDescricaoNovaCampanha("");
-			setCreateCampaignModalOpen(false);
 			setFeedback("Campanha criada com sucesso. Selecione ou continue com a campanha ativa para iniciar a jornada.");
 			pushToast("Campanha criada com sucesso.");
 		} catch (err) {
@@ -1236,7 +1294,116 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 		}
 	}
 
+	async function handleToggleCampanhaAtiva(targetCampanha: WorkflowCampanha, nextAtiva: boolean) {
+		if (!canManageCampanhas) {
+			setError("Seu perfil nao possui permissao para atualizar campanhas.");
+			return;
+		}
+
+		const previousCampanhas = campanhas;
+		const previousCampanhaId = campanhaId;
+
+		setUpdatingCampaignStatus(true);
+		setError("");
+
+		setCampanhas((current) => {
+			const nextCampaigns = current.map((item) =>
+				item.id === targetCampanha.id
+					? {
+						...item,
+						ativo: nextAtiva,
+					}
+					: item,
+			);
+			persistCampaigns(nextCampaigns);
+			return nextCampaigns;
+		});
+
+		if (!nextAtiva && previousCampanhaId === targetCampanha.id) {
+			setCampanhaId("");
+			dispatch({ type: "setCampanhaSelecionada", payload: "" });
+			resetParticipantJourney();
+		}
+
+		try {
+			const response = await atualizarCampanha(targetCampanha.id, {
+				ativa: nextAtiva,
+				nome: targetCampanha.nome,
+				descricao: targetCampanha.descricao,
+			});
+
+			if (!response.ok) {
+				throw new Error(response.message || "Falha ao atualizar status da campanha.");
+			}
+
+			if (!nextAtiva) {
+				setFeedback("Campanha desativada com sucesso e removida da lista ativa.");
+				pushToast("Campanha desativada.");
+			} else {
+				setFeedback("Campanha ativada com sucesso.");
+				pushToast("Campanha ativada.");
+			}
+		} catch (err) {
+			setCampanhas(previousCampanhas);
+			persistCampaigns(previousCampanhas);
+			setCampanhaId(previousCampanhaId);
+			dispatch({ type: "setCampanhaSelecionada", payload: previousCampanhaId });
+			setError(err instanceof Error ? err.message : "Falha ao atualizar status da campanha.");
+			pushToast(err instanceof Error ? err.message : "Falha ao atualizar status da campanha.", "error");
+		} finally {
+			setUpdatingCampaignStatus(false);
+		}
+	}
+
+	async function handleManualReactivateCampaign() {
+		const normalizedCampaignId = manualCampaignId.trim();
+
+		if (!canManageCampanhas) {
+			setError("Seu perfil nao possui permissao para atualizar campanhas.");
+			return;
+		}
+
+		if (!normalizedCampaignId) {
+			setError("Informe o ID da campanha para reativar manualmente.");
+			return;
+		}
+
+		setUpdatingCampaignStatus(true);
+		setError("");
+
+		try {
+			const response = await atualizarCampanha(normalizedCampaignId, { ativa: true });
+
+			if (!response.ok) {
+				throw new Error(response.message || "Falha ao ativar campanha pelo ID informado.");
+			}
+
+			const normalizedCampaign = normalizeCampanha(response.data);
+			if (normalizedCampaign) {
+				setCampanhas((current) => {
+					const nextCampaigns = mergeCampaignCollections(current, [normalizedCampaign]);
+					persistCampaigns(nextCampaigns);
+					return nextCampaigns;
+				});
+				setCampanhaGestaoId(normalizedCampaign.id);
+			}
+
+			setManualCampaignId("");
+			setFeedback("Campanha ativada com sucesso pelo ID informado.");
+			pushToast("Campanha ativada pelo ID.");
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Falha ao ativar campanha pelo ID informado.");
+			pushToast(err instanceof Error ? err.message : "Falha ao ativar campanha pelo ID informado.", "error");
+		} finally {
+			setUpdatingCampaignStatus(false);
+		}
+	}
+
 	const campanhasList = campanhasAtivas.map((item) => ({ value: item.id, label: item.nome ?? item.descricao ?? item.id }));
+	const campanhasGestaoList = campanhas.map((item) => ({
+		value: item.id,
+		label: `${item.nome ?? item.descricao ?? item.id} • ${item.ativo ? "Ativa" : "Inativa"}`,
+	}));
 
 	if (mode === "campanhas") {
 		return (
@@ -1258,6 +1425,24 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 							onSubmit={() => void handleCriarCampanha()}
 							canManageCampanhas={canManageCampanhas}
 							questionarios={questionarios}
+						/>
+						<CampanhaStatusCard
+							loading={loadingBaseData || updatingCampaignStatus}
+							canManageCampanhas={canManageCampanhas}
+							campanhaId={campanhaGestaoId}
+							onCampanhaChange={setCampanhaGestaoId}
+							campanhas={campanhasGestaoList}
+							selectedCampanha={selectedCampanhaGestao}
+							manualCampaignId={manualCampaignId}
+							onManualCampaignIdChange={setManualCampaignId}
+							onToggle={(nextAtiva) => {
+								if (selectedCampanhaGestao) {
+									void handleToggleCampanhaAtiva(selectedCampanhaGestao, nextAtiva);
+								}
+							}}
+							onManualReactivate={() => {
+								void handleManualReactivateCampaign();
+							}}
 						/>
 					</div>
 				</div>
@@ -1290,15 +1475,10 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 					<div className="rounded-2xl border border-white/10 bg-white/5 p-5">
 						<div className="flex flex-wrap items-start justify-between gap-4">
 							<h3 className="text-lg font-bold text-white">Campanha da jornada</h3>
-							{canManageCampanhas ? (
-								<Button type="button" onClick={() => setCreateCampaignModalOpen(true)} className="h-10 rounded-xl border border-cyan-300/30 bg-cyan-400/10 px-4 font-semibold text-cyan-100 hover:bg-cyan-400/20">
-									<Plus className="size-4" /> Criar campanha
-								</Button>
-							) : null}
 						</div>
 						<div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]">
 							<FieldSelect label="Campanha" value={campanhaId} onChange={handleCampanhaChange} options={campanhasList} disabled={loadingBaseData || submitting} placeholder="Selecione uma campanha ativa" />
-							<FieldReadonly label="Questionario vinculado" value={jornadaState.questionarioTitulo || selectedQuestionario?.nome || selectedQuestionario?.titulo || selectedCampanha?.questionarioId || "Nenhum questionario vinculado"} />
+							<FieldReadonly label="URL publica da pesquisa" value={selectedPesquisaPublicaUrl || "URL publica indisponivel para a campanha selecionada"} />
 						</div>
 					</div>
 
@@ -1486,7 +1666,6 @@ export function SensoBigFiveWorkflow({ loggedUser, mode = "aplicar" }: SensoBigF
 
 			<ConfirmarParticipanteModal open={confirmModalOpen} telefone={telefoneBusca} onTelefoneChange={setTelefoneBusca} onClose={() => setConfirmModalOpen(false)} onConfirm={() => void handleBuscarParticipante()} loading={submitting} />
 			<CadastrarParticipanteModal open={createModalOpen} telefone={telefoneBusca} nome={nomeNovoParticipante} email={emailNovoParticipante} onNomeChange={setNomeNovoParticipante} onEmailChange={setEmailNovoParticipante} onClose={() => setCreateModalOpen(false)} onConfirm={() => void handleCriarParticipante()} loading={submitting} />
-			<CreateCampaignModal open={createCampaignModalOpen} onClose={() => setCreateCampaignModalOpen(false)} onConfirm={() => void handleCriarCampanha()} nome={nomeNovaCampanha} descricao={descricaoNovaCampanha} questionarioId={questionarioNovaCampanhaId} onNomeChange={setNomeNovaCampanha} onDescricaoChange={setDescricaoNovaCampanha} onQuestionarioChange={setQuestionarioNovaCampanhaId} questionarios={questionarios} loading={creatingCampaign} canManageCampanhas={canManageCampanhas} />
 		</section>
 	);
 }
@@ -1516,7 +1695,7 @@ function FieldReadonly({ label, value }: { label: string; value: string }) {
 	return (
 		<label className="block text-sm text-slate-300">
 			<span className="mb-1 block">{label}</span>
-			<div className="flex min-h-11 items-center rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100">{value}</div>
+			<div className="flex min-h-11 items-start rounded-xl border border-white/15 bg-slate-950/65 px-3 py-3 text-sm text-slate-100 break-all">{value}</div>
 		</label>
 	);
 }
@@ -1531,6 +1710,53 @@ function CampanhaFormCard({ loading, nome, descricao, questionarioId, onNomeChan
 				<FieldSelect label="Questionario" value={questionarioId} onChange={onQuestionarioChange} options={questionarios.map((item) => ({ value: item.id, label: item.nome ?? item.titulo ?? item.id }))} disabled={loading || questionarios.length === 0 || !canManageCampanhas} placeholder="Selecione o questionario" />
 			</div>
 			<Button type="button" disabled={loading || !canManageCampanhas || !nome.trim() || !questionarioId} onClick={onSubmit} className="mt-4 h-10 rounded-xl bg-linear-to-r from-cyan-400 to-violet-500 px-4 font-semibold text-slate-950"><Plus className="size-4" />{loading ? "Criando campanha..." : "Criar campanha"}</Button>
+		</div>
+	);
+}
+
+function CampanhaStatusCard({ loading, canManageCampanhas, campanhaId, onCampanhaChange, campanhas, selectedCampanha, manualCampaignId, onManualCampaignIdChange, onToggle, onManualReactivate }: { loading: boolean; canManageCampanhas: boolean; campanhaId: string; onCampanhaChange: (value: string) => void; campanhas: Array<{ value: string; label: string }>; selectedCampanha: WorkflowCampanha | null; manualCampaignId: string; onManualCampaignIdChange: (value: string) => void; onToggle: (nextAtiva: boolean) => void; onManualReactivate: () => void }) {
+	return (
+		<div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+			<h3 className="text-lg font-bold text-white">Gerenciar campanhas</h3>
+			<p className="mt-1 text-sm text-slate-300">Ative ou desative campanhas de senso e Big Five. Campanhas inativas saem da lista de aplicacao, mas continuam disponiveis aqui para reativacao.</p>
+			<div className="mt-4 grid gap-4">
+				<FieldSelect
+					label="Campanha"
+					value={campanhaId}
+					onChange={onCampanhaChange}
+					options={campanhas}
+					disabled={loading || campanhas.length === 0 || !canManageCampanhas}
+					placeholder="Selecione uma campanha"
+				/>
+				<FieldReadonly label="Status atual" value={selectedCampanha ? (selectedCampanha.ativo ? "Ativa" : "Inativa") : "Nenhuma campanha selecionada"} />
+				<FieldReadonly label="Questionario vinculado" value={selectedCampanha?.questionarioId || "Nao informado"} />
+				<FieldReadonly label="URL publica" value={selectedCampanha?.urlPublica || "URL publica indisponivel"} />
+			</div>
+			<Button
+				type="button"
+				disabled={loading || !canManageCampanhas || !selectedCampanha}
+				onClick={() => onToggle(!(selectedCampanha?.ativo !== false))}
+				className="mt-4 h-10 rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 font-semibold text-amber-100 hover:bg-amber-400/20 disabled:opacity-60"
+			>
+				{loading ? "Atualizando campanha..." : selectedCampanha?.ativo !== false ? "Desativar campanha" : "Ativar campanha"}
+			</Button>
+			<div className="mt-5 rounded-xl border border-white/10 bg-slate-950/35 p-4">
+				<p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Fallback manual</p>
+				<p className="mt-2 text-sm text-slate-300">Se a campanha desativada nao vier na listagem, informe o ID dela para reativar manualmente.</p>
+				<div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+					<FieldInput label="ID da campanha" value={manualCampaignId} onChange={onManualCampaignIdChange} placeholder="Cole aqui o UUID da campanha" disabled={loading || !canManageCampanhas} />
+					<div className="flex items-end">
+						<Button
+							type="button"
+							disabled={loading || !canManageCampanhas || !manualCampaignId.trim()}
+							onClick={onManualReactivate}
+							className="h-11 rounded-xl bg-linear-to-r from-cyan-400 to-violet-500 px-4 font-semibold text-slate-950 disabled:opacity-60"
+						>
+							{loading ? "Ativando..." : "Ativar por ID"}
+						</Button>
+					</div>
+				</div>
+			</div>
 		</div>
 	);
 }
@@ -1574,23 +1800,4 @@ function CadastrarParticipanteModal({ open, telefone, nome, email, onNomeChange,
 	);
 }
 
-function CreateCampaignModal({ open, onClose, onConfirm, nome, descricao, questionarioId, onNomeChange, onDescricaoChange, onQuestionarioChange, questionarios, loading, canManageCampanhas }: { open: boolean; onClose: () => void; onConfirm: () => void; nome: string; descricao: string; questionarioId: string; onNomeChange: (value: string) => void; onDescricaoChange: (value: string) => void; onQuestionarioChange: (value: string) => void; questionarios: Questionario[]; loading: boolean; canManageCampanhas: boolean }) {
-	if (!open) return null;
-	return (
-		<div className="fixed inset-0 z-[122] flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm">
-			<div className="w-full max-w-xl rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-2xl shadow-slate-950/70">
-				<h3 className="text-lg font-black text-white">Criar campanha</h3>
-				<div className="mt-4 grid gap-3">
-					<FieldInput label="Nome da campanha" value={nome} onChange={onNomeChange} placeholder="Senso Iguaba" />
-					<FieldInput label="Descricao" value={descricao} onChange={onDescricaoChange} placeholder="Entrevistas do mes" />
-					<FieldSelect label="Questionario" value={questionarioId} onChange={onQuestionarioChange} options={questionarios.map((item) => ({ value: item.id, label: item.nome ?? item.titulo ?? item.id }))} disabled={loading || questionarios.length === 0 || !canManageCampanhas} placeholder="Selecione o questionario" />
-				</div>
-				<div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
-					<Button type="button" onClick={onClose} className="h-10 rounded-xl border border-white/10 bg-white/5 px-4 text-slate-200 hover:bg-white/10">Cancelar</Button>
-					<Button type="button" disabled={loading || !canManageCampanhas || !nome.trim() || !questionarioId} onClick={onConfirm} className="h-10 rounded-xl bg-linear-to-r from-cyan-400 to-violet-500 px-4 text-slate-950"><Plus className="size-4" />{loading ? "Criando campanha..." : "Criar campanha"}</Button>
-				</div>
-			</div>
-		</div>
-	);
-}
 

@@ -1,48 +1,42 @@
-import { Activity, Shield, Sparkles } from "lucide-react";
-
-const pillars = [
-  {
-    icon: Shield,
-    title: "Controle de acesso",
-    description: "Sessoes protegidas no servidor para as areas internas da plataforma.",
-  },
-  {
-    icon: Activity,
-    title: "Operacao em tempo real",
-    description: "Fluxos preparados para dashboards, auditoria e monitoramento de campo.",
-  },
-  {
-    icon: Sparkles,
-    title: "Base para escalar",
-    description: "Estrutura pronta para evoluir a autenticacao, servicos e modulos privados.",
-  },
-];
+import Link from "next/link";
+import { Brain } from "lucide-react";
 
 export function Footer() {
   return (
-    <footer className="border-t border-white/10 bg-slate-950/80">
-      <div className="mx-auto grid max-w-7xl gap-10 px-6 py-12 sm:px-10 lg:grid-cols-[1.2fr_repeat(3,minmax(0,1fr))]">
-        <div className="max-w-md space-y-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-cyan-300">
-            Neuro Track Front
-          </p>
-          <h2 className="text-2xl font-black text-white">
-            Interface interna para operacao, auditoria e inteligencia de dados.
-          </h2>
-          <p className="text-sm leading-6 text-slate-400">
-            Header autenticado, modal de acesso e area protegida preparados para o fluxo de trabalho do time.
-          </p>
-        </div>
+    <footer className="relative overflow-hidden border-t border-white/10 bg-slate-950">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.12),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.08),transparent_28%)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/45 to-transparent" />
 
-        {pillars.map((pillar) => (
-          <div key={pillar.title} className="rounded-3xl border border-white/10 bg-white/5 p-5">
-            <div className="mb-4 flex size-11 items-center justify-center rounded-2xl bg-cyan-400/10 text-cyan-300">
-              <pillar.icon className="size-5" />
+      <div className="mx-auto max-w-7xl px-6 py-12 sm:px-10">
+        <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-5 backdrop-blur sm:p-7">
+          <Link
+            href="/areashow"
+            className="inline-flex items-center gap-3 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 transition hover:bg-cyan-400/15"
+          >
+            <span className="flex size-9 items-center justify-center rounded-2xl bg-cyan-400/15 text-cyan-300">
+              <Brain className="size-4" />
+            </span>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-cyan-300">Neuro Track</p>
+              <p className="text-xs text-slate-400">Inteligencia populacional para operacoes de alta precisao</p>
             </div>
-            <h3 className="text-base font-semibold text-white">{pillar.title}</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-400">{pillar.description}</p>
+          </Link>
+
+          <div className="mt-5 grid gap-3 text-xs text-slate-400 sm:grid-cols-2">
+            <p className="rounded-xl border border-white/10 bg-slate-900/40 px-3 py-2">
+              Neuro Track. Operacao, auditoria e distribuicao publica em uma unica plataforma.
+            </p>
+            <p className="rounded-xl border border-white/10 bg-slate-900/40 px-3 py-2">
+              Ambiente protegido para inteligencia populacional, pesquisas e monitoramento territorial.
+            </p>
           </div>
-        ))}
+        </div>
+      </div>
+
+      <div className="border-t border-white/10">
+        <div className="mx-auto max-w-7xl px-6 py-4 text-center text-xs text-slate-500 sm:px-10">
+          <p>Todos os direitos reservados Neuro Track 2026 desenvolvido por Felipe Belmont</p>
+        </div>
       </div>
     </footer>
   );

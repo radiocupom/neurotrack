@@ -86,10 +86,6 @@ function readNullableNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function readBoolean(value: unknown, fallback = true) {
-  return typeof value === "boolean" ? value : fallback;
-}
-
 function unwrapPayload<T = unknown>(value: unknown): T {
   const raw = readObject(value);
   if (!raw) {
@@ -108,7 +104,12 @@ function unwrapPayload<T = unknown>(value: unknown): T {
 
 function getApiOrigin() {
   try {
-    return new URL(getExternalApiConfig().baseUrl).origin;
+    const baseUrl = getExternalApiConfig().baseUrl;
+    if (!baseUrl) {
+      return "";
+    }
+
+    return new URL(baseUrl).origin;
   } catch {
     return "";
   }
@@ -129,6 +130,68 @@ function resolverFotoCandidato(fotoUrl: string | null | undefined) {
   }
 
   return fotoUrl.startsWith("/") ? `${origin}${fotoUrl}` : `${origin}/${fotoUrl}`;
+}
+
+function sanitizeVotePublicUrl(value: string | null, pesquisaId: string) {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const path = `/pesquisa/${encodeURIComponent(pesquisaId)}`;
+  const publicBase = process.env.PUBLIC_WEB_BASE_URL?.trim().replace(/\/$/, "") || "";
+
+  function shouldReplaceOrigin(origin: string) {
+    const originLower = origin.toLowerCase();
+    if (originLower.includes("localhost") || originLower.includes("127.0.0.1")) {
+      return true;
+    }
+
+    const apiOrigin = getApiOrigin().toLowerCase();
+    return Boolean(apiOrigin) && originLower === apiOrigin;
+  }
+
+  if (trimmed.includes("/intencao-voto/")) {
+    try {
+      const current = new URL(trimmed);
+      if (publicBase) {
+        return `${publicBase}${path}`;
+      }
+
+      return `${current.origin}${path}`;
+    } catch {
+      return path;
+    }
+  }
+
+  try {
+    const current = new URL(trimmed);
+    if (shouldReplaceOrigin(current.origin)) {
+      if (publicBase) {
+        return `${publicBase}${path}`;
+      }
+
+      return path;
+    }
+  } catch {
+    // valor pode ser relativo e deve ser mantido
+  }
+
+  return trimmed;
+}
+
+function buildVotePublicUrlFallback(pesquisaId: string) {
+  const base = process.env.PUBLIC_WEB_BASE_URL?.trim();
+  const path = `/pesquisa/${encodeURIComponent(pesquisaId)}`;
+  if (!base) {
+    return path;
+  }
+
+  return `${base.replace(/\/$/, "")}${path}`;
 }
 
 function normalizeCandidato(value: unknown, fallbackIndex = 0): CandidatoIntencaoVoto {
@@ -257,15 +320,28 @@ function normalizePesquisa(value: unknown, includeResultado = false): PesquisaIn
     return null;
   }
 
+  const pesquisaId = readString(raw.id);
+  const urlPublicaRaw =
+    readNullableString(raw.urlPublica)
+    ?? readNullableString(raw.urlPesquisa)
+    ?? readNullableString(raw.url);
+  const urlPublica = sanitizeVotePublicUrl(urlPublicaRaw, pesquisaId) || buildVotePublicUrlFallback(pesquisaId);
+
   const candidatosRaw = Array.isArray(raw.candidatos) ? raw.candidatos : [];
 
   return {
-    id: readString(raw.id),
+    id: pesquisaId,
     titulo: readString(raw.titulo) || "Pesquisa de intenção de voto",
     descricao: readNullableString(raw.descricao),
     cargo: readString(raw.cargo) || "Cargo não informado",
-    ativo: readBoolean(raw.ativo, true),
-    urlPesquisa: readNullableString(raw.urlPesquisa),
+    ativo:
+      typeof raw.ativo === "boolean"
+        ? raw.ativo
+        : typeof raw.ativa === "boolean"
+          ? raw.ativa
+          : true,
+    urlPublica,
+    urlPesquisa: readNullableString(raw.urlPesquisa) ?? urlPublica,
     idRegistroTSE: readNullableString(raw.idRegistroTSE),
     criadoPorId: readNullableString(raw.criadoPorId),
     criadoEm: readString(raw.criadoEm) || undefined,

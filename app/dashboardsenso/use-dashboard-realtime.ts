@@ -13,11 +13,7 @@ let subscriberCount = 0;
 let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 function getSocketUrl() {
-  const raw = (
-    process.env.NEXT_PUBLIC_SOCKET_URL
-    ?? process.env.NEXT_PUBLIC_DASHBOARD_SOCKET_URL
-    ?? ""
-  ).trim();
+  const raw = (process.env.NEXT_PUBLIC_SOCKET_URL ?? "").trim();
 
   if (!raw) return "https://api.neurotrack.site";
   return raw.endsWith("/") ? raw.slice(0, -1) : raw;

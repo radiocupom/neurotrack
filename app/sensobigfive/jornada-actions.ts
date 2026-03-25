@@ -5,6 +5,7 @@ import { ExternalApiError, readExternalApiErrorMessage } from "@/service/api";
 import {
   carregarQuestionarioBigFive,
   avaliarBigFiveFromExternalApi,
+  avaliarBigFivePublicoFromExternalApi,
   obterResultadoBigFiveFromExternalApi,
   type BigFiveCamposExtrasPayload,
 } from "@/service/bigfive.service";
@@ -13,12 +14,14 @@ import {
   criarParticipanteFromExternalApi,
 } from "@/service/participantes.service";
 import {
+  atualizarCampanhaSensoFromExternalApi,
   criarCampanhaSensoFromExternalApi,
   listarCampanhasSensoFromExternalApi,
   listarQuestionariosSensoFromExternalApi,
   obterQuestionarioBaseSensoFromExternalApi,
   precheckJornadaPublicaSensoFromExternalApi,
   responderSensoFromExternalApi,
+  responderSensoPublicoFromExternalApi,
   type PrecheckJornadaPublicaSenso,
 } from "@/service/sensoPopulacional.service";
 
@@ -277,6 +280,25 @@ export async function criarCampanha(payload: {
   }
 }
 
+export async function atualizarCampanha(
+  campanhaId: string,
+  payload: {
+    ativa: boolean;
+    nome?: string;
+    descricao?: string;
+  },
+): Promise<ApiResult<Record<string, unknown>>> {
+  const auth = await requireToken();
+  if (!auth.ok) return { ok: false, status: auth.status, data: null, message: auth.message };
+
+  try {
+    const data = await atualizarCampanhaSensoFromExternalApi(auth.token, campanhaId, payload);
+    return { ok: true, status: 200, data: data as Record<string, unknown>, message: "ok" };
+  } catch (error) {
+    return toApiError(error, "Falha ao atualizar campanha.");
+  }
+}
+
 export async function enviarSenso(payload: {
   participanteId: string;
   questionarioId: string;
@@ -306,6 +328,75 @@ export async function enviarBigFive(payload: ScorePayload): Promise<ApiResult<Re
     return { ok: true, status, data: (data ?? {}) as Record<string, unknown>, message: "ok" };
   } catch (error) {
     return toApiError(error, "Falha ao enviar Big Five.");
+  }
+}
+
+export async function enviarSensoPublico(payload: {
+  telefone: string;
+  nome?: string;
+  email?: string;
+  questionarioId: string;
+  campanhaId: string;
+  estado: string;
+  cidade: string;
+  bairro: string;
+  respostas: Array<{ perguntaId: string; opcaoId: string }>;
+  canal?: "WHATSAPP" | "TELEFONE" | "PRESENCIAL" | "OUTRO";
+  idade?: number;
+}): Promise<ApiResult<Record<string, unknown>>> {
+  try {
+    const { status, data } = await responderSensoPublicoFromExternalApi({
+      ...payload,
+      telefone: payload.telefone.trim(),
+      nome: payload.nome?.trim() || undefined,
+      email: payload.email?.trim() || undefined,
+      canal: payload.canal ?? "WHATSAPP",
+    });
+
+    return { ok: true, status, data: (data ?? {}) as Record<string, unknown>, message: "ok" };
+  } catch (error) {
+    return toApiError(error, "Falha ao enviar respostas do senso no fluxo público.");
+  }
+}
+
+export async function enviarBigFivePublico(payload: {
+  telefone: string;
+  nome?: string;
+  email?: string;
+  campanhaId: string;
+  abertura1: number;
+  abertura2: number;
+  abertura3: number;
+  consc1: number;
+  consc2: number;
+  consc3: number;
+  extro1: number;
+  extro2: number;
+  extro3: number;
+  amavel1: number;
+  amavel2: number;
+  amavel3: number;
+  neuro1: number;
+  neuro2: number;
+  neuro3: number;
+  canal?: "WHATSAPP" | "TELEFONE" | "PRESENCIAL" | "OUTRO";
+  idade?: number;
+  estado?: string;
+  cidade?: string;
+  bairro?: string;
+}): Promise<ApiResult<Record<string, unknown>>> {
+  try {
+    const { status, data } = await avaliarBigFivePublicoFromExternalApi({
+      ...payload,
+      telefone: payload.telefone.trim(),
+      nome: payload.nome?.trim() || undefined,
+      email: payload.email?.trim() || undefined,
+      canal: payload.canal ?? "WHATSAPP",
+    });
+
+    return { ok: true, status, data: (data ?? {}) as Record<string, unknown>, message: "ok" };
+  } catch (error) {
+    return toApiError(error, "Falha ao enviar Big Five no fluxo público.");
   }
 }
 

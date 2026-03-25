@@ -279,7 +279,14 @@ export type DashboardAuditoriaResumoEntrevistadores = {
 };
 
 export type DashboardAuditoriaEntrevistadorItem = {
-  entrevistador: { id: string; nome: string; email?: string | null };
+  entrevistador: {
+    id: string;
+    nome: string;
+    email?: string | null;
+    ativo?: boolean;
+    papel?: string | null;
+    criadoEm?: string | null;
+  };
   totais: {
     opiniao: number;
     senso: number;
@@ -329,11 +336,12 @@ export type DashboardAuditoriaEntrevistadorDetalhes = {
   entrevistador?: { id?: string; nome?: string | null; email?: string | null };
   filtrosAplicados?: DashboardFilters;
   resumo: {
-    totalFiltrado: number;
     totalOpiniao: number;
     totalSenso: number;
     totalBigFive: number;
     totalIntencao: number;
+    totalGeral: number;
+    totalFiltrado?: number;
   };
   paginacao?: { totalFiltrado: number; limit: number; offset: number; temMais: boolean };
   registros: DashboardAuditoriaRegistroEntrevistador[];

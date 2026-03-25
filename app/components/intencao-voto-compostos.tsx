@@ -39,7 +39,7 @@ export function ResumoPesquisaVoto({ pesquisa }: { pesquisa: PesquisaIntencaoVot
           <InfoRow label="Cargo" value={pesquisa.cargo} />
           <InfoRow label="Candidatos" value={String(pesquisa.candidatos.length)} />
           <InfoRow label="Registro TSE" value={pesquisa.idRegistroTSE || "-"} />
-          <InfoRow label="URL publica" value={pesquisa.urlPesquisa || "-"} />
+          <InfoRow label="URL publica" value={pesquisa.urlPublica || pesquisa.urlPesquisa || "-"} />
         </div>
       </div>
     </Card>

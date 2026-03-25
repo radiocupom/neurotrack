@@ -27,8 +27,10 @@ import type {
 import type { DashboardFilters } from "@/service/dashboard-filters";
 
 const TIPOS_PESQUISA = ["INTENCAO", "OPINIAO", "SENSO", "BIGFIVE"] as const;
+const CANAIS_PESQUISA = ["WHATSAPP", "PRESENCIAL", "TELEFONE", "OUTRO"] as const;
 
 type TipoPesquisa = (typeof TIPOS_PESQUISA)[number];
+type CanalPesquisa = (typeof CANAIS_PESQUISA)[number];
 
 type FiltrosEntrevistador = {
   entrevistadorId: string;
@@ -39,6 +41,7 @@ type FiltrosEntrevistador = {
   respondidoDe: string;
   respondidoAte: string;
   tipoPesquisa: TipoPesquisa[];
+  canal: CanalPesquisa[];
   limit: number;
   offset: number;
 };
@@ -47,6 +50,8 @@ type PaginacaoDetalhe = {
   limit: number;
   offset: number;
 };
+
+type PeriodoPreset = "custom" | "hoje" | "7dias" | "30dias";
 
 function emptyFiltros(): FiltrosEntrevistador {
   return {
@@ -58,6 +63,7 @@ function emptyFiltros(): FiltrosEntrevistador {
     respondidoDe: "",
     respondidoAte: "",
     tipoPesquisa: [],
+    canal: [],
     limit: 10,
     offset: 0,
   };
@@ -90,6 +96,32 @@ function parseCsvList(value: string) {
     .filter(Boolean);
 }
 
+function toInputDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function buildPeriodoPresetRange(preset: Exclude<PeriodoPreset, "custom">) {
+  const today = new Date();
+  const end = new Date(today);
+  const start = new Date(today);
+
+  if (preset === "7dias") {
+    start.setDate(start.getDate() - 6);
+  }
+
+  if (preset === "30dias") {
+    start.setDate(start.getDate() - 29);
+  }
+
+  return {
+    respondidoDe: toInputDate(start),
+    respondidoAte: toInputDate(end),
+  };
+}
+
 function buildBaseFilters(filters: FiltrosEntrevistador): DashboardFilters {
   const query: DashboardFilters = {};
 
@@ -103,6 +135,7 @@ function buildBaseFilters(filters: FiltrosEntrevistador): DashboardFilters {
   if (campanhaIds.length) query.campanhaId = campanhaIds;
   if (participanteIds.length) query.participanteId = participanteIds;
   if (filters.tipoPesquisa.length) query.tipoPesquisa = filters.tipoPesquisa;
+  if (filters.canal.length) query.canal = filters.canal;
   if (filters.nome.trim()) query.nome = filters.nome.trim();
   if (filters.respondidoDe) query.respondidoDe = filters.respondidoDe;
   if (filters.respondidoAte) query.respondidoAte = filters.respondidoAte;
@@ -125,6 +158,9 @@ function normalizeLista(payload: unknown): DashboardAuditoriaEntrevistadoresResp
         id: readString(entrevistador.id) || `entrevistador-${index}`,
         nome: readString(entrevistador.nome) || "Sem nome",
         email: readString(entrevistador.email) || null,
+        ativo: typeof entrevistador.ativo === "boolean" ? entrevistador.ativo : true,
+        papel: readString(entrevistador.papel) || null,
+        criadoEm: readString(entrevistador.criadoEm) || null,
       },
       totais: {
         opiniao: readNumber(totais.opiniao),
@@ -155,7 +191,8 @@ function normalizeLista(payload: unknown): DashboardAuditoriaEntrevistadoresResp
 function normalizeDetalhes(payload: unknown): DashboardAuditoriaEntrevistadorDetalhes {
   const raw = asObject(payload);
   const entrevistadorRaw = asObject(raw.entrevistador);
-  const resumoRaw = asObject(raw.resumo);
+  const totaisRaw = asObject(raw.totais);
+  const resumoRaw = Object.keys(totaisRaw).length > 0 ? totaisRaw : asObject(raw.resumo);
   const paginacaoRaw = asObject(raw.paginacao);
   const registrosRaw = Array.isArray(raw.registros) ? raw.registros : [];
 
@@ -241,11 +278,12 @@ function normalizeDetalhes(payload: unknown): DashboardAuditoriaEntrevistadorDet
       ? (raw.filtrosAplicados as DashboardFilters)
       : undefined,
     resumo: {
-      totalFiltrado: readNumber(resumoRaw.totalFiltrado),
       totalOpiniao: readNumber(resumoRaw.totalOpiniao),
       totalSenso: readNumber(resumoRaw.totalSenso),
       totalBigFive: readNumber(resumoRaw.totalBigFive),
       totalIntencao: readNumber(resumoRaw.totalIntencao),
+      totalGeral: readNumber(resumoRaw.totalGeral),
+      totalFiltrado: readNumber(resumoRaw.totalFiltrado),
     },
     paginacao: {
       totalFiltrado: readNumber(paginacaoRaw.totalFiltrado),
@@ -304,6 +342,7 @@ export function DashboardEntrevistadores({ loggedUser }: DashboardEntrevistadore
   const [refreshSeed, setRefreshSeed] = useState(0);
   const [filtros, setFiltros] = useState<FiltrosEntrevistador>(emptyFiltros());
   const [paginacaoDetalhe, setPaginacaoDetalhe] = useState<PaginacaoDetalhe>(emptyPaginacaoDetalhe());
+  const [periodoPreset, setPeriodoPreset] = useState<PeriodoPreset>("custom");
 
   const [lista, setLista] = useState<DashboardAuditoriaEntrevistadoresResponse | null>(null);
   const [detalhes, setDetalhes] = useState<DashboardAuditoriaEntrevistadorDetalhes | null>(null);
@@ -331,6 +370,12 @@ export function DashboardEntrevistadores({ loggedUser }: DashboardEntrevistadore
       return value != null && String(value).trim() !== "";
     }).length;
   }, [filtros]);
+
+  const totalEntrevistadoresLista = lista?.resumo.totalEntrevistadores ?? 0;
+  const totalPaginasLista = Math.max(1, Math.ceil(totalEntrevistadoresLista / filtros.limit));
+  const paginaAtualLista = Math.min(totalPaginasLista, Math.floor(filtros.offset / filtros.limit) + 1);
+  const hasPrevLista = filtros.offset > 0;
+  const hasNextLista = filtros.offset + (lista?.entrevistadores.length ?? 0) < totalEntrevistadoresLista;
 
   const chartData = useMemo(() => {
     return (lista?.entrevistadores ?? []).map((item) => ({
@@ -385,9 +430,32 @@ export function DashboardEntrevistadores({ loggedUser }: DashboardEntrevistadore
     });
   }, []);
 
+  const toggleCanal = useCallback((canal: CanalPesquisa) => {
+    setFiltros((prev) => {
+      const exists = prev.canal.includes(canal);
+      return {
+        ...prev,
+        canal: exists ? prev.canal.filter((item) => item !== canal) : [...prev.canal, canal],
+        offset: 0,
+      };
+    });
+  }, []);
+
   const clearFiltros = useCallback(() => {
     setFiltros(emptyFiltros());
     setPaginacaoDetalhe(emptyPaginacaoDetalhe());
+    setPeriodoPreset("custom");
+  }, []);
+
+  const applyPeriodoPreset = useCallback((preset: Exclude<PeriodoPreset, "custom">) => {
+    const range = buildPeriodoPresetRange(preset);
+    setPeriodoPreset(preset);
+    setFiltros((prev) => ({
+      ...prev,
+      respondidoDe: range.respondidoDe,
+      respondidoAte: range.respondidoAte,
+      offset: 0,
+    }));
   }, []);
 
   const refetchLista = useCallback(async () => {
@@ -401,9 +469,6 @@ export function DashboardEntrevistadores({ loggedUser }: DashboardEntrevistadore
     };
 
     const result = await obterAuditoriaEntrevistadoresDashboardAction(query);
-
-    console.log("[dashboard-entrevistadores] lista/query", query);
-    console.log("[dashboard-entrevistadores] lista/raw", result.data);
 
     if (!result.ok || !result.data) {
       setLoadingLista(false);
@@ -443,9 +508,6 @@ export function DashboardEntrevistadores({ loggedUser }: DashboardEntrevistadore
 
     const result = await obterPesquisasEntrevistadorDashboardAction(selectedEntrevistadorId, query);
 
-    console.log("[dashboard-entrevistadores] detalhes/query", { entrevistadorId: selectedEntrevistadorId, ...query });
-    console.log("[dashboard-entrevistadores] detalhes/raw", result.data);
-
     if (!result.ok || !result.data) {
       setLoadingDetalhes(false);
       setErrorDetalhes(result.message || "Falha ao carregar detalhes do entrevistador.");
@@ -457,14 +519,17 @@ export function DashboardEntrevistadores({ loggedUser }: DashboardEntrevistadore
   }, [filtros, paginacaoDetalhe.limit, paginacaoDetalhe.offset, selectedEntrevistadorId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refetchLista();
   }, [refetchLista, refreshSeed]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refetchDetalhes();
   }, [refetchDetalhes, refreshSeed]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPaginacaoDetalhe((prev) => ({ ...prev, offset: 0 }));
   }, [selectedEntrevistadorId]);
 
@@ -579,7 +644,10 @@ export function DashboardEntrevistadores({ loggedUser }: DashboardEntrevistadore
               <input
                 type="date"
                 value={filtros.respondidoDe}
-                onChange={(event) => setFiltros((prev) => ({ ...prev, respondidoDe: event.target.value, offset: 0 }))}
+                onChange={(event) => {
+                  setPeriodoPreset("custom");
+                  setFiltros((prev) => ({ ...prev, respondidoDe: event.target.value, offset: 0 }));
+                }}
                 className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
               />
             </label>
@@ -589,10 +657,52 @@ export function DashboardEntrevistadores({ loggedUser }: DashboardEntrevistadore
               <input
                 type="date"
                 value={filtros.respondidoAte}
-                onChange={(event) => setFiltros((prev) => ({ ...prev, respondidoAte: event.target.value, offset: 0 }))}
+                onChange={(event) => {
+                  setPeriodoPreset("custom");
+                  setFiltros((prev) => ({ ...prev, respondidoAte: event.target.value, offset: 0 }));
+                }}
                 className="h-11 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 text-sm text-slate-100"
               />
             </label>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => applyPeriodoPreset("hoje")}
+              className={[
+                "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                periodoPreset === "hoje"
+                  ? "border-violet-400/40 bg-violet-400/15 text-violet-200"
+                  : "border-white/15 bg-white/5 text-slate-300 hover:bg-white/10",
+              ].join(" ")}
+            >
+              Hoje
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPeriodoPreset("7dias")}
+              className={[
+                "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                periodoPreset === "7dias"
+                  ? "border-violet-400/40 bg-violet-400/15 text-violet-200"
+                  : "border-white/15 bg-white/5 text-slate-300 hover:bg-white/10",
+              ].join(" ")}
+            >
+              Ultimos 7 dias
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPeriodoPreset("30dias")}
+              className={[
+                "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                periodoPreset === "30dias"
+                  ? "border-violet-400/40 bg-violet-400/15 text-violet-200"
+                  : "border-white/15 bg-white/5 text-slate-300 hover:bg-white/10",
+              ].join(" ")}
+            >
+              Ultimos 30 dias
+            </button>
           </div>
 
           <div className="mt-3 flex flex-wrap gap-3">
@@ -611,6 +721,27 @@ export function DashboardEntrevistadores({ loggedUser }: DashboardEntrevistadore
                   ].join(" ")}
                 >
                   {tipo}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-3">
+            {CANAIS_PESQUISA.map((canal) => {
+              const active = filtros.canal.includes(canal);
+              return (
+                <button
+                  key={canal}
+                  type="button"
+                  onClick={() => toggleCanal(canal)}
+                  className={[
+                    "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                    active
+                      ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-200"
+                      : "border-white/15 bg-white/5 text-slate-300 hover:bg-white/10",
+                  ].join(" ")}
+                >
+                  {canal}
                 </button>
               );
             })}
@@ -660,7 +791,29 @@ export function DashboardEntrevistadores({ loggedUser }: DashboardEntrevistadore
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-              <h3 className="text-lg font-bold text-white">Lista de entrevistadores</h3>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-lg font-bold text-white">Lista de entrevistadores</h3>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                  <span>Pagina {paginaAtualLista} de {totalPaginasLista}</span>
+                  <span>•</span>
+                  <span>{totalEntrevistadoresLista} entrevistador(es)</span>
+                  <label className="ml-2 inline-flex items-center gap-2">
+                    <span>Itens</span>
+                    <select
+                      value={String(filtros.limit)}
+                      onChange={(event) => {
+                        const nextLimit = Number(event.target.value) || 10;
+                        setFiltros((prev) => ({ ...prev, limit: nextLimit, offset: 0 }));
+                      }}
+                      className="h-8 rounded-lg border border-white/15 bg-slate-950/65 px-2 text-xs text-slate-100"
+                    >
+                      <option value="10">10</option>
+                      <option value="25">25</option>
+                      <option value="50">50</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
               <div className="mt-4 overflow-x-auto">
                 <table className="w-full text-sm text-slate-200">
                   <thead className="border-b border-white/10 text-slate-400">
@@ -699,6 +852,24 @@ export function DashboardEntrevistadores({ loggedUser }: DashboardEntrevistadore
                   </tbody>
                 </table>
               </div>
+              <div className="mt-4 flex gap-2">
+                <Button
+                  type="button"
+                  onClick={() => setFiltros((prev) => ({ ...prev, offset: Math.max(prev.offset - prev.limit, 0) }))}
+                  disabled={!hasPrevLista}
+                  className="border border-white/20 bg-white/5 text-slate-200"
+                >
+                  Pagina anterior
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => setFiltros((prev) => ({ ...prev, offset: prev.offset + prev.limit }))}
+                  disabled={!hasNextLista}
+                  className="border border-white/20 bg-white/5 text-slate-200"
+                >
+                  Proxima pagina
+                </Button>
+              </div>
             </div>
           </div>
         ) : null}
@@ -716,7 +887,7 @@ export function DashboardEntrevistadores({ loggedUser }: DashboardEntrevistadore
             {detalhes ? (
               <>
                 <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
-                  <KpiCard label="Total filtrado" value={String(detalhes.resumo.totalFiltrado)} />
+                  <KpiCard label="Total geral" value={String(detalhes.resumo.totalGeral)} />
                   <KpiCard label="Intencao" value={String(detalhes.resumo.totalIntencao)} />
                   <KpiCard label="Opiniao" value={String(detalhes.resumo.totalOpiniao)} />
                   <KpiCard label="Senso" value={String(detalhes.resumo.totalSenso)} />

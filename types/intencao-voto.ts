@@ -77,6 +77,7 @@ export type PesquisaIntencaoVoto = {
   descricao?: string | null;
   cargo: string;
   ativo?: boolean;
+  urlPublica?: string | null;
   urlPesquisa?: string | null;
   idRegistroTSE?: string | null;
   criadoPorId?: string | null;

@@ -186,6 +186,7 @@ export function ResponderPesquisaPrivadoClient() {
                 <ResumoPesquisa
                   titulo={pesquisa.titulo}
                   descricao={pesquisa.descricao}
+                  urlPublica={pesquisa.urlPublica}
                   totalPerguntas={perguntas.length}
                   totalRespostas={Object.keys(respostas).length}
                 />
@@ -239,6 +240,7 @@ export function ResponderPesquisaPrivadoClient() {
             <ResumoPesquisa
               titulo={pesquisa.titulo}
               descricao={pesquisa.descricao}
+              urlPublica={pesquisa.urlPublica}
               totalPerguntas={perguntas.length}
               totalRespostas={Object.keys(respostas).filter((key) => respostas[key]).length}
             />

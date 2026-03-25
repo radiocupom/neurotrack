@@ -139,16 +139,9 @@ export function usePesquisaOpiniaoPublico({
           return;
         }
 
-        // Nome é obrigatório no modo público
-        if (!nome || !nome.trim()) {
-          setParticipanteError("Nome é obrigatório.");
-          setParticipanteLoading(false);
-          return;
-        }
-
         const resultado = await identificarParticipanteOpiniaoPublico({
           telefone: telefone.trim(),
-          nome: nome.trim(),
+          nome: nome?.trim() || "Participante",
           email: email?.trim(),
         });
 

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 
-import { Alert, Button, Card, Input, Select } from "@/app/components/ui-primitives";
+import { Alert, Button, Card, Input, Select, Toggle } from "@/app/components/ui-primitives";
 import type {
   AtualizarPesquisaIntencaoVotoPayload,
   CriarPesquisaIntencaoVotoPayload,
@@ -27,7 +27,6 @@ export type PesquisaIntencaoVotoFormValues = {
   descricao: string;
   cargo: string;
   idRegistroTSE: string;
-  urlPesquisa: string;
   ativa: boolean;
   candidatos: CandidatoDraft[];
 };
@@ -92,7 +91,6 @@ export function toPesquisaFormValues(
     descricao: pesquisa?.descricao || "",
     cargo: pesquisa?.cargo || "",
     idRegistroTSE: pesquisa?.idRegistroTSE || "",
-    urlPesquisa: pesquisa?.urlPesquisa || "",
     ativa: pesquisa?.ativo !== false,
     candidatos: pesquisa?.candidatos?.length
       ? pesquisa.candidatos.map((candidato) => ({
@@ -116,10 +114,48 @@ function normalizeCandidates(values: PesquisaIntencaoVotoFormValues) {
   }));
 }
 
+function normalizeCandidateId(id?: string) {
+  if (!id) {
+    return undefined;
+  }
+
+  const trimmed = id.trim();
+  if (!trimmed || /^candidato-\d+$/i.test(trimmed)) {
+    return undefined;
+  }
+
+  return trimmed;
+}
+
+function areCandidatesEqual(
+  currentCandidates: CandidatoDraft[],
+  incomingCandidates: CandidatoDraft[],
+) {
+  if (currentCandidates.length !== incomingCandidates.length) {
+    return false;
+  }
+
+  return currentCandidates.every((current, index) => {
+    const incoming = incomingCandidates[index];
+    if (!incoming) {
+      return false;
+    }
+
+    return (
+      normalizeCandidateId(current.id) === normalizeCandidateId(incoming.id)
+      && current.nome.trim() === incoming.nome.trim()
+      && current.partido.trim() === incoming.partido.trim()
+      && current.fotoUrl.trim() === incoming.fotoUrl.trim()
+      && !current.file
+    );
+  });
+}
+
 export function buildPesquisaRequest(
   values: PesquisaIntencaoVotoFormValues,
   mode: "create" | "edit",
   createdById?: string,
+  originalValues?: PesquisaIntencaoVotoFormValues,
 ):
   | { ok: true; body: CriarPesquisaIntencaoVotoPayload | AtualizarPesquisaIntencaoVotoPayload | FormData }
   | { ok: false; message: string } {
@@ -156,11 +192,16 @@ export function buildPesquisaRequest(
 
   const hasFile = candidatos.some((candidato) => candidato.file);
   const candidatosPayload = candidatos.map((candidato) => ({
-    ...(candidato.id ? { id: candidato.id } : {}),
+    ...(normalizeCandidateId(candidato.id) ? { id: normalizeCandidateId(candidato.id) } : {}),
     nome: candidato.nome,
     partido: candidato.partido,
     ...(candidato.fotoUrl && !candidato.file ? { fotoUrl: candidato.fotoUrl } : {}),
   }));
+
+  const shouldSendCandidatesInEdit = mode === "create"
+    || hasFile
+    || !originalValues
+    || !areCandidatesEqual(values.candidatos, originalValues.candidatos);
 
   if (hasFile) {
     const formData = new FormData();
@@ -176,15 +217,13 @@ export function buildPesquisaRequest(
       formData.append("idRegistroTSE", values.idRegistroTSE.trim());
     }
 
-    if (values.urlPesquisa.trim()) {
-      formData.append("urlPesquisa", values.urlPesquisa.trim());
-    }
-
     if (mode === "edit") {
       formData.append("ativo", String(values.ativa));
     }
 
-    formData.append("candidatos", JSON.stringify(candidatosPayload));
+    if (shouldSendCandidatesInEdit) {
+      formData.append("candidatos", JSON.stringify(candidatosPayload));
+    }
     candidatos.forEach((candidato) => {
       if (candidato.file) {
         formData.append("fotos", candidato.file);
@@ -203,7 +242,6 @@ export function buildPesquisaRequest(
         cargo: values.cargo.trim(),
         criadoPorId: createdById || "",
         idRegistroTSE: values.idRegistroTSE.trim() || undefined,
-        urlPesquisa: values.urlPesquisa.trim() || undefined,
         candidatos: candidatosPayload,
       } satisfies CriarPesquisaIntencaoVotoPayload,
     };
@@ -217,8 +255,7 @@ export function buildPesquisaRequest(
       cargo: values.cargo.trim(),
       ativo: values.ativa,
       idRegistroTSE: values.idRegistroTSE.trim() || undefined,
-      urlPesquisa: values.urlPesquisa.trim() || undefined,
-      candidatos: candidatosPayload,
+      ...(shouldSendCandidatesInEdit ? { candidatos: candidatosPayload } : {}),
     } satisfies AtualizarPesquisaIntencaoVotoPayload,
   };
 }
@@ -249,6 +286,7 @@ export function PesquisaIntencaoVotoForm({
   onDelete?: () => Promise<void>;
 }) {
   const [values, setValues] = useState<PesquisaIntencaoVotoFormValues>(incomingValues);
+  const [initialValues] = useState<PesquisaIntencaoVotoFormValues>(incomingValues);
   const [localError, setLocalError] = useState<string | null>(null);
 
   function updateCandidate(index: number, patch: Partial<CandidatoDraft>) {
@@ -293,7 +331,7 @@ export function PesquisaIntencaoVotoForm({
         onSubmit={(event) => {
           event.preventDefault();
           setLocalError(null);
-          const request = buildPesquisaRequest(values, mode, createdById);
+          const request = buildPesquisaRequest(values, mode, createdById, initialValues);
           if (!request.ok) {
             setLocalError(request.message);
             return;
@@ -335,23 +373,15 @@ export function PesquisaIntencaoVotoForm({
               onChange={(event) => setValues((current) => ({ ...current, idRegistroTSE: event.target.value }))}
               placeholder="ABC123"
             />
-            <div className="lg:col-span-2">
-              <Input
-                label="URL da pesquisa"
-                value={values.urlPesquisa}
-                onChange={(event) => setValues((current) => ({ ...current, urlPesquisa: event.target.value }))}
-                placeholder="https://site.com/pesquisa"
-              />
-            </div>
             {mode === "edit" ? (
-              <label className="flex items-center gap-2 text-sm text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={values.ativa}
-                  onChange={(event) => setValues((current) => ({ ...current, ativa: event.target.checked }))}
-                />
-                Pesquisa ativa
-              </label>
+              <Toggle
+                checked={values.ativa}
+                onChange={(checked) => setValues((current) => ({ ...current, ativa: checked }))}
+                label="Pesquisa ativa"
+                description="Quando desativada, a pesquisa deixa de aparecer em listar pesquisas."
+                disabled={loading}
+                className="lg:col-span-2"
+              />
             ) : null}
           </div>
         </Card>

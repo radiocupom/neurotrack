@@ -4,6 +4,7 @@ export type SensoQuestionario = {
   id: string;
   nome?: string;
   titulo?: string;
+  urlPublica?: string;
 };
 
 export type SensoCampanha = {
@@ -11,6 +12,7 @@ export type SensoCampanha = {
   nome?: string;
   descricao?: string;
   questionarioId?: string;
+  urlPublica?: string;
   ativo?: boolean;
   isAtivo?: boolean;
   status?: string;
@@ -18,6 +20,7 @@ export type SensoCampanha = {
     id?: string;
     nome?: string;
     titulo?: string;
+    urlPublica?: string;
   };
 };
 
@@ -25,6 +28,12 @@ export type CriarSensoCampanhaPayload = {
   nome: string;
   descricao?: string;
   questionarioId: string;
+};
+
+export type AtualizarSensoCampanhaPayload = {
+  ativa: boolean;
+  nome?: string;
+  descricao?: string;
 };
 
 export type RespostaSenso = {
@@ -55,6 +64,7 @@ export type PrecheckJornadaPublicaSenso = {
     id?: string;
     slug?: string;
     titulo?: string;
+    urlPublica?: string;
   };
   status?: {
     etapaAtual?: PrecheckEtapaAtual;
@@ -69,11 +79,15 @@ export type PrecheckJornadaPublicaSenso = {
 
 export type ResponderSensoPublicoPayload = {
   telefone: string;
+  nome?: string;
+  email?: string;
   questionarioId: string;
   campanhaId: string;
   estado: string;
   cidade: string;
   bairro: string;
+  canal?: "WHATSAPP" | "TELEFONE" | "PRESENCIAL" | "OUTRO";
+  idade?: number;
   respostas: RespostaSenso[];
 };
 
@@ -129,6 +143,20 @@ export function criarCampanhaSensoFromExternalApi(token: string, payload: CriarS
   });
 }
 
+export function atualizarCampanhaSensoFromExternalApi(
+  token: string,
+  campanhaId: string,
+  payload: AtualizarSensoCampanhaPayload,
+) {
+  return externalApiRequest<SensoCampanha>(`/senso-populacional/campanhas/${encodeURIComponent(campanhaId)}`, {
+    method: "PUT",
+    body: payload,
+    token,
+    requiresAuth: true,
+    requiresPrivateToken: true,
+  });
+}
+
 export function responderSensoFromExternalApi(token: string, payload: ResponderSensoPayload) {
   return externalApiRequestWithMeta<unknown>("/senso-populacional/responder", {
     method: "POST",
@@ -140,7 +168,7 @@ export function responderSensoFromExternalApi(token: string, payload: ResponderS
 }
 
 export function responderSensoPublicoFromExternalApi(payload: ResponderSensoPublicoPayload) {
-  return externalApiRequest<Record<string, unknown>>("/senso-populacional/responder-publico", {
+  return externalApiRequestWithMeta<Record<string, unknown>>("/senso-populacional/responder-publico", {
     method: "POST",
     body: payload,
   });

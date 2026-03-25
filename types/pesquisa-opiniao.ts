@@ -48,7 +48,8 @@ export type PesquisaOpiniao = {
   id: string;
   titulo: string;
   descricao?: string | null;
-  ativa?: boolean;
+  ativo?: boolean;
+  urlPublica?: string | null;
   criadoEm?: string;
   perguntas: Pergunta[];
 };
@@ -77,7 +78,7 @@ export type CriarPesquisaOpiniaoPayload = {
 export type AtualizarPesquisaOpiniaoPayload = {
   titulo?: string;
   descricao?: string;
-  ativa?: boolean;
+  ativo?: boolean;
   perguntas?: {
     create?: PesquisaPerguntaInput[];
   };

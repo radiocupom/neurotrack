@@ -89,9 +89,13 @@ export function useIntencaoVotoPublico({ pesquisaId }: { pesquisaId: string }) {
     setParticipanteError(null);
 
     try {
-      const result = await identificarParticipanteIntencaoVotoPublicoAction(payload.telefone);
+      const result = await identificarParticipanteIntencaoVotoPublicoAction({
+        telefone: payload.telefone,
+        nome: payload.nome,
+        email: payload.email,
+      });
       if (!result.ok || !result.data) {
-        setParticipanteError(result.message || "Participante nao cadastrado.");
+        setParticipanteError(result.message || "Nao foi possivel identificar o participante.");
         return;
       }
 

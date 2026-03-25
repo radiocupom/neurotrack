@@ -86,11 +86,26 @@ export function EditarPesquisaIntencaoVotoClient() {
       return;
     }
 
-    setSuccess(result.status === 202 ? "Atualizacao enviada para fila de processamento." : "Pesquisa atualizada com sucesso.");
+    const pesquisaAtualizada = result.data;
+    const foiDesativada = pesquisaAtualizada?.ativo === false;
+
+    setSuccess(
+      foiDesativada
+        ? "Pesquisa desativada com sucesso. Ela nao aparece mais na listagem de pesquisas ativas."
+        : result.status === 202
+          ? "Atualizacao enviada para fila de processamento."
+          : "Pesquisa atualizada com sucesso.",
+    );
+
     if (result.data) {
       setPesquisa(result.data);
     }
     await refetch();
+
+    if (foiDesativada) {
+      setPesquisaId("");
+      setPesquisa(null);
+    }
   }
 
   async function handleDelete() {

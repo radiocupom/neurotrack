@@ -11,6 +11,7 @@ export type WorkflowCampanha = {
   nome: string;
   descricao?: string;
   questionarioId: string;
+  urlPublica?: string;
   ativo: boolean;
 };
 
@@ -34,6 +35,36 @@ function readQuestionarioId(item: Record<string, unknown>) {
   }
 
   return "";
+}
+
+function readPublicUrl(item: Record<string, unknown>) {
+  const directCandidates = [item.urlPublica, item.urlPesquisa, item.publicUrl, item.linkPublico];
+
+  for (const candidate of directCandidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  const questionario = readObject(item.questionario);
+  if (!questionario) {
+    return undefined;
+  }
+
+  const nestedCandidates = [
+    questionario.urlPublica,
+    questionario.urlPesquisa,
+    questionario.publicUrl,
+    questionario.linkPublico,
+  ];
+
+  for (const candidate of nestedCandidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return undefined;
 }
 
 function readActiveState(item: Record<string, unknown>) {
@@ -88,6 +119,7 @@ export function normalizeCampanha(payload: unknown): WorkflowCampanha | null {
           : "Campanha sem nome",
     descricao: typeof item.descricao === "string" ? item.descricao.trim() : undefined,
     questionarioId,
+    urlPublica: readPublicUrl(item),
     ativo: readActiveState(item),
   };
 }
