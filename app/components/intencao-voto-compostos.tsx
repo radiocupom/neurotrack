@@ -17,14 +17,28 @@ function initials(value: string) {
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/35 px-3 py-2">
+    <div className="flex flex-col gap-1 rounded-xl border border-white/10 bg-slate-950/35 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
       <span className="text-slate-400">{label}</span>
-      <span className="truncate font-semibold text-slate-100">{value}</span>
+      <span className="break-all text-left font-semibold text-slate-100 sm:max-w-[220px] sm:text-right">{value}</span>
     </div>
   );
 }
 
 export function ResumoPesquisaVoto({ pesquisa }: { pesquisa: PesquisaIntencaoVotoDetalhe }) {
+  const [copiado, setCopiado] = useState(false);
+  const urlPublica = pesquisa.urlPublica || pesquisa.urlPesquisa || "";
+
+  function copiarLinkPublico() {
+    if (!urlPublica.trim()) {
+      return;
+    }
+
+    void navigator.clipboard.writeText(urlPublica.trim()).then(() => {
+      setCopiado(true);
+      window.setTimeout(() => setCopiado(false), 1400);
+    });
+  }
+
   return (
     <Card className="border-cyan-400/30 bg-cyan-400/10">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -35,13 +49,24 @@ export function ResumoPesquisaVoto({ pesquisa }: { pesquisa: PesquisaIntencaoVot
           <h2 className="mt-3 text-2xl font-black text-white">{pesquisa.titulo}</h2>
           {pesquisa.descricao ? <p className="mt-2 max-w-3xl text-sm text-slate-300">{pesquisa.descricao}</p> : null}
         </div>
-        <div className="grid min-w-[220px] gap-2 text-sm text-slate-200">
+        <div className="grid w-full min-w-0 gap-2 text-sm text-slate-200 sm:w-auto sm:min-w-[220px]">
           <InfoRow label="Cargo" value={pesquisa.cargo} />
           <InfoRow label="Candidatos" value={String(pesquisa.candidatos.length)} />
           <InfoRow label="Registro TSE" value={pesquisa.idRegistroTSE || "-"} />
-          <InfoRow label="URL publica" value={pesquisa.urlPublica || pesquisa.urlPesquisa || "-"} />
+          <InfoRow label="URL publica" value={urlPublica || "-"} />
         </div>
       </div>
+      {urlPublica.trim() ? (
+        <div className="mt-4 flex justify-start sm:justify-end">
+          <button
+            type="button"
+            onClick={copiarLinkPublico}
+            className="inline-flex h-8 items-center justify-center rounded-lg border border-cyan-300/35 bg-cyan-400/10 px-3 text-[11px] font-semibold text-cyan-100 transition hover:bg-cyan-400/20"
+          >
+            {copiado ? "Copiado!" : "Copiar link"}
+          </button>
+        </div>
+      ) : null}
     </Card>
   );
 }
@@ -186,7 +211,7 @@ export function PainelSelecaoVoto({
           />
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-200">Canal</label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {canais.map((item) => (
                 <button
                   key={item}

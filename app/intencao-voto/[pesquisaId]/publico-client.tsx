@@ -134,7 +134,7 @@ export function IntencaoVotoPublicoClient({ pesquisaId }: { pesquisaId: string }
                   onCanalChange={setCanal}
                   error={contexto.error}
                 />
-                <div className="flex gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row">
                   <Button onClick={() => setPasso("localizacao")} variant="secondary" fullWidth>
                     Voltar
                   </Button>

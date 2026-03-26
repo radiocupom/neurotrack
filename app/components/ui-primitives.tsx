@@ -361,34 +361,36 @@ export function Stepper({ steps, currentStep }: StepperProps) {
   const currentIndex = steps.findIndex((s) => s.id === currentStep);
 
   return (
-    <div className="mb-8 flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.02] p-3">
-      {steps.map((step, index) => (
-        <div key={step.id} className="flex items-center flex-1">
-          <div className="flex flex-col items-center">
-            <div
-              className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold",
-                index <= currentIndex
-                  ? "bg-gradient-to-r from-cyan-400 to-purple-500 text-slate-950"
-                  : "bg-slate-800 text-slate-400",
-              )}
-            >
-              {index < currentIndex ? "✓" : index + 1}
+    <div className="mb-8 overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.02] p-3">
+      <div className="flex min-w-max items-center gap-2 sm:min-w-0 sm:justify-between">
+        {steps.map((step, index) => (
+          <div key={step.id} className="flex min-w-[90px] flex-1 items-center sm:min-w-0">
+            <div className="flex w-full flex-col items-center">
+              <div
+                className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold",
+                  index <= currentIndex
+                    ? "bg-gradient-to-r from-cyan-400 to-purple-500 text-slate-950"
+                    : "bg-slate-800 text-slate-400",
+                )}
+              >
+                {index < currentIndex ? "✓" : index + 1}
+              </div>
+              <p className="mt-2 text-center text-[11px] font-semibold text-slate-300">{step.label}</p>
             </div>
-            <p className="mt-2 text-center text-[11px] font-semibold text-slate-300">{step.label}</p>
+            {index < steps.length - 1 && (
+              <div
+                className={cn(
+                  "mx-2 h-1 flex-1 rounded-full",
+                  index < currentIndex
+                    ? "bg-gradient-to-r from-cyan-400 to-purple-500"
+                    : "bg-slate-800",
+                )}
+              />
+            )}
           </div>
-          {index < steps.length - 1 && (
-            <div
-              className={cn(
-                "mx-2 h-1 flex-1 rounded-full",
-                index < currentIndex
-                  ? "bg-gradient-to-r from-cyan-400 to-purple-500"
-                  : "bg-slate-800",
-              )}
-            />
-          )}
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

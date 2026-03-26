@@ -367,6 +367,7 @@ export async function enviarBigFivePublico(payload: {
   abertura1: number;
   abertura2: number;
   abertura3: number;
+  participanteId: string;
   consc1: number;
   consc2: number;
   consc3: number;
@@ -391,6 +392,7 @@ export async function enviarBigFivePublico(payload: {
       telefone: payload.telefone.trim(),
       nome: payload.nome?.trim() || undefined,
       email: payload.email?.trim() || undefined,
+      participanteId: payload.participanteId.trim(),
       canal: payload.canal ?? "WHATSAPP",
     });
 

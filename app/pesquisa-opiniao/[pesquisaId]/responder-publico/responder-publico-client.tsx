@@ -179,7 +179,7 @@ export function ResponderPesquisaPublicoClient({ pesquisaId }: { pesquisaId: str
 
               <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-4">
                 <h3 className="mb-3 text-sm font-semibold text-slate-200">Dados complementares (opcional)</h3>
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
                   <label className="text-sm text-slate-300">
                     <span className="mb-1 block">Canal</span>
                     <select
@@ -231,7 +231,7 @@ export function ResponderPesquisaPublicoClient({ pesquisaId }: { pesquisaId: str
                 <Alert type="error" className="mb-4">{contexto.error}</Alert>
               ) : null}
 
-              <div className="mt-6 flex gap-3">
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
                 <Button onClick={() => setPasso("localizacao")} variant="secondary" fullWidth>
                   Voltar
                 </Button>

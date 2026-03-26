@@ -22,11 +22,7 @@ import { CacheManager } from "@/lib/cache/cache-manager";
 import { getBrowserCache, removeBrowserCache, setBrowserCache } from "@/lib/cache/browser-cache";
 import { cn } from "@/lib/utils";
 import {
-  enviarAudioWhatsAppAction,
-  enviarDocumentoWhatsAppAction,
-  enviarImagemWhatsAppAction,
   enviarMensagemTextoWhatsAppAction,
-  enviarVideoWhatsAppAction,
   conectarInstanciaWhatsAppAction,
   desconectarInstanciaWhatsAppAction,
   listarPesquisasPublicasWhatsAppAction,
@@ -194,48 +190,18 @@ function mapInboxToMessagesByContact(chats: ApiInboxChat[]) {
   }, {});
 }
 
-function fileToDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      if (!result) {
-        reject(new Error("Nao foi possivel converter o arquivo para base64."));
-        return;
-      }
-
-      resolve(result);
-    };
-    reader.onerror = () => reject(new Error("Falha ao ler arquivo local."));
-    reader.readAsDataURL(file);
+async function uploadWhatsAppMedia(path: string, formData: FormData) {
+  const response = await fetch(path, {
+    method: "POST",
+    body: formData,
   });
-}
 
-function blobToDataUrl(blob: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      if (!result) {
-        reject(new Error("Nao foi possivel converter o audio para base64."));
-        return;
-      }
-
-      resolve(result);
-    };
-    reader.onerror = () => reject(new Error("Falha ao processar o audio gravado."));
-    reader.readAsDataURL(blob);
-  });
-}
-
-function readFileExtension(fileName: string) {
-  const dotIndex = fileName.lastIndexOf(".");
-  if (dotIndex < 0) {
-    return "bin";
-  }
-
-  const extension = fileName.slice(dotIndex + 1).trim().toLowerCase();
-  return extension || "bin";
+  const payload = await response.json().catch(() => null);
+  return {
+    ok: response.ok && payload?.ok !== false,
+    status: typeof payload?.status === "number" ? payload.status : response.status,
+    message: typeof payload?.message === "string" ? payload.message : "Falha ao enviar midia.",
+  };
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────
@@ -1035,7 +1001,6 @@ export function WhatsAppPanel() {
     setSendingMessage(true);
 
     try {
-      const dataUrl = await fileToDataUrl(file);
       const mime = (file.type || "").toLowerCase();
       const isImage = mime.startsWith("image/");
       const isVideo = mime.startsWith("video/");
@@ -1045,41 +1010,36 @@ export function WhatsAppPanel() {
       let feedback = "Arquivo enviado.";
 
       if (isImage) {
-        const response = await enviarImagemWhatsAppAction({
-          phone: activeContactId,
-          image: dataUrl,
-          caption: file.name,
-          delayMessage: 3,
-        });
-        result = { ok: response.ok, message: response.message };
+        const formData = new FormData();
+        formData.append("phone", activeContactId);
+        formData.append("image", file, file.name);
+        formData.append("caption", file.name);
+        formData.append("delayMessage", "3");
+        result = await uploadWhatsAppMedia("/api/whatsapp/send-image", formData);
         feedback = `Imagem enviada: ${file.name}`;
       } else if (isVideo) {
-        const response = await enviarVideoWhatsAppAction({
-          phone: activeContactId,
-          video: dataUrl,
-          caption: file.name,
-          delayMessage: 3,
-        });
-        result = { ok: response.ok, message: response.message };
+        const formData = new FormData();
+        formData.append("phone", activeContactId);
+        formData.append("video", file, file.name);
+        formData.append("caption", file.name);
+        formData.append("delayMessage", "3");
+        result = await uploadWhatsAppMedia("/api/whatsapp/send-video", formData);
         feedback = `Video enviado: ${file.name}`;
       } else if (isAudio) {
-        const response = await enviarAudioWhatsAppAction({
-          phone: activeContactId,
-          audio: dataUrl,
-          delayMessage: 3,
-        });
-        result = { ok: response.ok, message: response.message };
+        const formData = new FormData();
+        formData.append("phone", activeContactId);
+        formData.append("audio", file, file.name);
+        formData.append("delayMessage", "3");
+        result = await uploadWhatsAppMedia("/api/whatsapp/send-audio", formData);
         feedback = `Audio enviado: ${file.name}`;
       } else {
-        const response = await enviarDocumentoWhatsAppAction({
-          phone: activeContactId,
-          document: dataUrl,
-          extension: readFileExtension(file.name),
-          fileName: file.name,
-          caption: file.name,
-          delayMessage: 3,
-        });
-        result = { ok: response.ok, message: response.message };
+        const formData = new FormData();
+        formData.append("phone", activeContactId);
+        formData.append("document", file, file.name);
+        formData.append("fileName", file.name);
+        formData.append("caption", file.name);
+        formData.append("delayMessage", "3");
+        result = await uploadWhatsAppMedia("/api/whatsapp/send-document", formData);
         feedback = `Documento enviado: ${file.name}`;
       }
 
@@ -1141,12 +1101,11 @@ export function WhatsAppPanel() {
         setSendingMessage(true);
 
         try {
-          const audioBase64 = await blobToDataUrl(audioBlob);
-          const result = await enviarAudioWhatsAppAction({
-            phone: activeContactId,
-            audio: audioBase64,
-            delayMessage: 3,
-          });
+          const formData = new FormData();
+          formData.append("phone", activeContactId);
+          formData.append("audio", audioBlob, "gravacao.webm");
+          formData.append("delayMessage", "3");
+          const result = await uploadWhatsAppMedia("/api/whatsapp/send-audio", formData);
 
           if (!result.ok) {
             setErrorMessage(result.message || "Falha ao enviar audio gravado.");

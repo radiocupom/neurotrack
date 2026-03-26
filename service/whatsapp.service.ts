@@ -599,6 +599,16 @@ export function enviarImagemWhatsAppFromExternalApi(
   });
 }
 
+export function enviarImagemWhatsAppMultipartFromExternalApi(token: string, formData: FormData) {
+  return externalApiRequest<WhatsAppSendResponse>(`${WHATSAPP_BASE_PATH}/send-image`, {
+    method: "POST",
+    body: formData,
+    token,
+    requiresAuth: true,
+    requiresPrivateToken: true,
+  });
+}
+
 export function enviarAudioWhatsAppFromExternalApi(
   token: string,
   payload: WhatsAppSendAudioPayload,
@@ -606,6 +616,16 @@ export function enviarAudioWhatsAppFromExternalApi(
   return externalApiRequest<WhatsAppSendResponse>(`${WHATSAPP_BASE_PATH}/send-audio`, {
     method: "POST",
     body: normalizeAudioPayload(payload),
+    token,
+    requiresAuth: true,
+    requiresPrivateToken: true,
+  });
+}
+
+export function enviarAudioWhatsAppMultipartFromExternalApi(token: string, formData: FormData) {
+  return externalApiRequest<WhatsAppSendResponse>(`${WHATSAPP_BASE_PATH}/send-audio`, {
+    method: "POST",
+    body: formData,
     token,
     requiresAuth: true,
     requiresPrivateToken: true,
@@ -625,6 +645,16 @@ export function enviarVideoWhatsAppFromExternalApi(
   });
 }
 
+export function enviarVideoWhatsAppMultipartFromExternalApi(token: string, formData: FormData) {
+  return externalApiRequest<WhatsAppSendResponse>(`${WHATSAPP_BASE_PATH}/send-video`, {
+    method: "POST",
+    body: formData,
+    token,
+    requiresAuth: true,
+    requiresPrivateToken: true,
+  });
+}
+
 export function enviarDocumentoWhatsAppFromExternalApi(
   token: string,
   payload: WhatsAppSendDocumentPayload,
@@ -632,6 +662,16 @@ export function enviarDocumentoWhatsAppFromExternalApi(
   return externalApiRequest<WhatsAppSendResponse>(`${WHATSAPP_BASE_PATH}/send-document`, {
     method: "POST",
     body: normalizeDocumentPayload(payload),
+    token,
+    requiresAuth: true,
+    requiresPrivateToken: true,
+  });
+}
+
+export function enviarDocumentoWhatsAppMultipartFromExternalApi(token: string, formData: FormData) {
+  return externalApiRequest<WhatsAppSendResponse>(`${WHATSAPP_BASE_PATH}/send-document`, {
+    method: "POST",
+    body: formData,
     token,
     requiresAuth: true,
     requiresPrivateToken: true,

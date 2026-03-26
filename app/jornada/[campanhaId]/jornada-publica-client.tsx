@@ -42,20 +42,52 @@ function readObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
 }
 
+function readString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readParticipanteId(value: unknown) {
+  const root = readObject(value);
+  if (!root) {
+    return "";
+  }
+
+  const participante = readObject(root.participante);
+  const data = readObject(root.data);
+  const status = readObject(root.status);
+
+  return readString(root.participanteId)
+    || readString(participante?.id)
+    || readString(data?.participanteId)
+    || readString(status?.participanteId);
+}
+
+function readEtapaAtual(value: unknown) {
+  const root = readObject(value);
+  const status = readObject(root?.status);
+  return readString(status?.etapaAtual).toUpperCase();
+}
+
 function normalizeBigFiveQuestionario(value: unknown): BigFiveQuestionario | null {
-  const raw = readObject(value);
+  const root = readObject(value);
+  const raw =
+    readObject(root?.data) ??
+    readObject(root?.resultado) ??
+    readObject(root?.item) ??
+    readObject(root?.payload) ??
+    root;
   if (!raw) return null;
 
   const perguntasRaw = Array.isArray(raw.perguntas) ? raw.perguntas : [];
   const perguntas = perguntasRaw
     .map((item, index) => {
       const pergunta = readObject(item);
-      if (!pergunta || typeof pergunta.id !== "string" || typeof pergunta.campo !== "string") {
+      if (!pergunta || typeof pergunta.campo !== "string") {
         return null;
       }
 
       return {
-        id: pergunta.id,
+        id: typeof pergunta.id === "string" && pergunta.id.trim() ? pergunta.id : `${pergunta.campo}-${index + 1}`,
         texto: typeof pergunta.texto === "string" ? pergunta.texto : `Pergunta ${index + 1}`,
         campo: pergunta.campo,
         ordem: typeof pergunta.ordem === "number" ? pergunta.ordem : index + 1,
@@ -109,6 +141,7 @@ export function JornadaPublicaClient({ campanhaId }: { campanhaId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [queued, setQueued] = useState(false);
   const [sensoPendente, setSensoPendente] = useState(false);
+  const [participanteId, setParticipanteId] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -185,6 +218,11 @@ export function JornadaPublicaClient({ campanhaId }: { campanhaId: string }) {
         return;
       }
 
+      const participanteIdLido = readParticipanteId(result.data);
+      if (participanteIdLido) {
+        setParticipanteId(participanteIdLido);
+      }
+
       const status = readObject(result.data.status);
       const jornadaConcluida = Boolean(status?.jornadaConcluida || status?.etapaAtual === "JORNADA_CONCLUIDA");
       if (jornadaConcluida) {
@@ -245,14 +283,36 @@ export function JornadaPublicaClient({ campanhaId }: { campanhaId: string }) {
         return;
       }
 
-      setStep("bigfive");
+      const precheckResult = await precheckJornada({
+        campanhaId,
+        telefone: telefone.replace(/\D/g, ""),
+        participanteId,
+      });
+
+      if (!precheckResult.ok || !precheckResult.data) {
+        setError(precheckResult.message || "Falha ao validar etapa do Big Five.");
+        return;
+      }
+
+      const participanteIdLido = readParticipanteId(precheckResult.data);
+      if (participanteIdLido) {
+        setParticipanteId(participanteIdLido);
+      }
+
+      const etapaAtual = readEtapaAtual(precheckResult.data);
+      if (etapaAtual === "BIGFIVE") {
+        setStep("bigfive");
+        return;
+      }
+
+      setError("A etapa Big Five ainda nao foi liberada para este participante.");
     } finally {
       setSubmitting(false);
     }
   }
 
   async function handleEnviarBigFive() {
-    if (!bigFiveQuestionario || !localizacao) {
+    if (!bigFiveQuestionario || !localizacao || !participanteId) {
       setError("Complete identificacao e localizacao antes de enviar o Big Five.");
       return;
     }
@@ -273,6 +333,7 @@ export function JornadaPublicaClient({ campanhaId }: { campanhaId: string }) {
       }, {});
 
       const result = await enviarBigFivePublico({
+        participanteId,
         telefone: telefone.replace(/\D/g, ""),
         nome: nome.trim() || undefined,
         email: email.trim() || undefined,
@@ -418,7 +479,7 @@ export function JornadaPublicaClient({ campanhaId }: { campanhaId: string }) {
                 </div>
               </div>
             ))}
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <Button onClick={() => setStep("localizacao")} variant="secondary" fullWidth>
                 Voltar
               </Button>
@@ -452,7 +513,7 @@ export function JornadaPublicaClient({ campanhaId }: { campanhaId: string }) {
                 </div>
               </div>
             ))}
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <Button onClick={() => setStep(sensoPendente ? "senso" : "localizacao")} variant="secondary" fullWidth>
                 Voltar
               </Button>

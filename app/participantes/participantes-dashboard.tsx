@@ -399,7 +399,7 @@ export function ParticipantesDashboard() {
           </p>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
           <KpiCard label="Participantes" value={String(listResumo.length)} />
           <KpiCard label="Registros totais" value={String(totalRegistros)} />
           <KpiCard
